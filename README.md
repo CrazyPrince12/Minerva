@@ -37,7 +37,7 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 | Icônes        | Font Awesome 6.5.2 (CDN) |
 | Backend       | Une seule fonction serverless `/api/chat.js` |
 | Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq |
-| Modèle        | `openai/gpt-oss-20b` par défaut (configurable via `GROQ_MODEL`) ; le sélecteur client peut seulement remplacer ce nom de modèle dans la requête, avec `llama-3.1-8b-instant` en secours si le modèle choisi/principal renvoie 429/5xx |
+| Modèle        | `openai/gpt-oss-20b` par défaut (configurable via `GROQ_MODEL`) ; le sélecteur client peut seulement remplacer ce nom de modèle dans la requête, avec `openai/gpt-oss-120b` en secours si le modèle choisi/principal renvoie 429/5xx |
 | Hébergement   | Vercel (fonction serverless) et Render (service Node) |
 | Secrets       | `process.env.GROQ_API_KEY`, jamais exposé au client |
 
@@ -117,7 +117,7 @@ L'application est disponible sur **<http://localhost:3000>**.
 | ---------------------- | ----------- | ----------------------------------------------------- | ----------- |
 | `GROQ_API_KEY`         | oui         | —                                                     | Clé API Groq (jamais côté client). |
 | `GROQ_MODEL`           | non         | `openai/gpt-oss-20b`                                  | Modèle Groq principal. |
-| `GROQ_FALLBACK_MODELS` | non         | `llama-3.1-8b-instant`                                | Modèles de secours (uniquement si le principal renvoie 429/5xx/404). `none` pour désactiver. |
+| `GROQ_FALLBACK_MODELS` | non         | `openai/gpt-oss-120b`                                 | Modèles de secours (uniquement si le principal renvoie 429/5xx/404). `none` pour désactiver. |
 | `GROQ_TEMPERATURE`     | non         | `0.7`                                                 | Température de génération. |
 | `GROQ_MAX_TOKENS`      | non         | `4096`                                                | Nombre max de tokens de sortie. |
 | `GROQ_DEADLINE_MS`     | non         | `26000`                                               | Budget total d'une requête côté serveur (doit rester < `maxDuration`). |

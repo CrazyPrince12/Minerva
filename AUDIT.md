@@ -51,7 +51,7 @@ Quatre causes cumulées :
 
 **Correctifs** (le modèle et `max_tokens` restent ceux d'origine : `openai/gpt-oss-20b`, 4096)
 
-- Côté serveur : 2 tentatives sur le modèle principal avec backoff (respect de l'en-tête `Retry-After` de Groq), puis **bascule sur un modèle de secours uniquement en cas d'échec** (`llama-3.1-8b-instant`, désactivable avec `GROQ_FALLBACK_MODELS=none`). Budget global borné (`GROQ_DEADLINE_MS`, défaut 26 s).
+- Côté serveur : 2 tentatives sur le modèle principal avec backoff (respect de l'en-tête `Retry-After` de Groq), puis **bascule sur un modèle de secours uniquement en cas d'échec** (`openai/gpt-oss-120b`, désactivable avec `GROQ_FALLBACK_MODELS=none`). Budget global borné (`GROQ_DEADLINE_MS`, défaut 26 s).
 - `vercel.json` : `maxDuration` 10 s → 30 s ; timeout client aligné à 55 s.
 - Fenêtre de mémoire ramenée de 10 à 8 messages envoyés (40 conservés dans `localStorage`) : moins de tokens par requête, donc moins de 429. Remettre `MEMORY_WINDOW = 10` dans `api/chat.js` si tu préfères l'ancien comportement.
 - Côté client : jusqu'à 3 tentatives sur 429/5xx, avec affichage « Groq est saturé, nouvel essai dans X s » dans la bulle de réflexion au lieu d'un message d'erreur immédiat.

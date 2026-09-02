@@ -19,13 +19,11 @@ const ATTEMPTS_PER_MODEL = 2;
 // il ne change rien au fonctionnement normal.
 // Désactiver les secours : GROQ_FALLBACK_MODELS=none
 const DEFAULT_MODEL = "openai/gpt-oss-20b";
-const DEFAULT_FALLBACK_MODELS = "llama-3.1-8b-instant";
+const DEFAULT_FALLBACK_MODELS = "openai/gpt-oss-120b";
 
 const ALLOWED_CHAT_MODELS = new Set([
   "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
-  "llama-3.1-8b-instant",
-  "llama-3.3-70b-versatile",
   "groq/compound",
   "groq/compound-mini",
 ]);
