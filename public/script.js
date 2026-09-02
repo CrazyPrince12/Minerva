@@ -75,12 +75,16 @@ function createId() {
 function updateThemeIcons() {
   const dark = document.documentElement.dataset.theme === "dark";
   // Une seule icône "cercle demi-ouvert" : elle fonctionne pour les deux
-  // thèmes et reste cohérente avec Font Awesome (pas d'emoji).
-  elements.themeIcon.classList.toggle("fa-moon", !dark);
-  elements.themeIcon.classList.toggle("fa-sun", dark);
-  elements.themeIcon.classList.remove("fa-circle-half-stroke");
-  elements.themeToggle.setAttribute("aria-label", dark ? "Passer au thème clair" : "Passer au thème sombre");
-  elements.themeToggle.setAttribute("title", dark ? "Passer au thème clair" : "Passer au thème sombre");
+  // thèmes et reste cohérente avec Font Awesome (pas d'emoji). Le garde-fou
+  // évite qu'un ancien index.html encore en cache bloque l'initialisation du
+  // formulaire de chat.
+  if (elements.themeIcon) {
+    elements.themeIcon.classList.toggle("fa-moon", !dark);
+    elements.themeIcon.classList.toggle("fa-sun", dark);
+    elements.themeIcon.classList.remove("fa-circle-half-stroke");
+  }
+  elements.themeToggle?.setAttribute("aria-label", dark ? "Passer au thème clair" : "Passer au thème sombre");
+  elements.themeToggle?.setAttribute("title", dark ? "Passer au thème clair" : "Passer au thème sombre");
 }
 
 function toggleTheme() {
@@ -94,7 +98,7 @@ function toggleTheme() {
   updateThemeIcons();
 }
 
-elements.themeToggle.addEventListener("click", toggleTheme);
+elements.themeToggle?.addEventListener("click", toggleTheme);
 updateThemeIcons();
 
 /* ------------------------------------------------------------------ */

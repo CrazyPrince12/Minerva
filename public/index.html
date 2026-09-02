@@ -35,7 +35,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=20260902-1" />
 
   <script>
     // Applique le thème avant le rendu pour éviter le flash.
@@ -100,6 +100,7 @@
     <span id="thinking-text">Minerva réfléchit…</span>
   </div>
 
-  <script src="/script.js" type="module"></script>
+  <!-- La version évite de réutiliser le JS incompatible mis en cache avant ce correctif. -->
+  <script src="/script.js?v=20260902-1" type="module"></script>
 </body>
 </html>
