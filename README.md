@@ -14,7 +14,8 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 - Icônes **Font Awesome 6** partout (header, envoi, copier, erreurs) : **aucun emoji** dans l'interface.
 - Message d'accueil contextuel basé sur l'heure locale du navigateur (plusieurs formulations par créneau).
 - Conversation **strictement chronologique** : le message le plus ancien en haut, la réponse la plus récente en bas.
-- Bulles alignées comme une messagerie classique : **Minerva à gauche** (avec avatar), **vous à droite**, même gabarit de bulle des deux côtés.
+- Bulles alignées comme une messagerie classique : **Minerva à gauche** (avec avatar), **vous à droite** (bulle + avatar collés à l'extrême droite), même gabarit de bulle des deux côtés.
+- **Sélecteur de modèle IA dans la barre de saisie** : choix parmi les modèles Groq de production (GPT-OSS 20B/120B, Llama 3.1 8B, Llama 3.3 70B, Groq Compound / Compound Mini), choix mémorisé dans `localStorage`, étiquette du modèle réellement utilisé affichée sur chaque réponse.
 - Rendu **markdown** : gras, italique, listes, liens, tableaux, blocs de code.
 - Blocs de code avec **coloration syntaxique légère** et bouton **Copier**. Bouton *Copier* également sur chaque message.
 - Barre de saisie auto-extensible, envoi avec **Entrée**, saut de ligne avec **Maj+Entrée**.
@@ -36,7 +37,7 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 | Icônes        | Font Awesome 6.5.2 (CDN) |
 | Backend       | Une seule fonction serverless `/api/chat.js` |
 | Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq |
-| Modèle        | `openai/gpt-oss-20b` (configurable via `GROQ_MODEL`), avec `llama-3.1-8b-instant` en secours uniquement si le principal renvoie 429/5xx |
+| Modèle        | Choix client parmi les modèles Groq de production (liste blanche côté serveur) ; défaut `openai/gpt-oss-20b` (configurable via `GROQ_MODEL`), avec `llama-3.1-8b-instant` en secours uniquement si le principal renvoie 429/5xx |
 | Hébergement   | Vercel (fonction serverless) et Render (service Node) |
 | Secrets       | `process.env.GROQ_API_KEY`, jamais exposé au client |
 

@@ -21,17 +21,31 @@ const ATTEMPTS_PER_MODEL = 2;
 const DEFAULT_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_FALLBACK_MODELS = "llama-3.1-8b-instant";
 
-function resolveModels() {
+// Modèles Groq de production autorisés pour le sélecteur du client
+// (https://console.groq.com/docs/models). Liste blanche : le client ne peut
+// demander QUE ces identifiants. Whisper est exclu (transcription audio,
+// pas un modèle de conversation).
+export const GROQ_CHAT_MODELS = new Set([
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+  "llama-3.1-8b-instant",
+  "llama-3.3-70b-versatile",
+  "groq/compound",
+  "groq/compound-mini",
+]);
+
+// `requested` = modèle choisi par l'utilisateur dans l'interface (si valide).
+// Il devient le modèle principal ; la chaîne configurée (GROQ_MODEL +
+// GROQ_FALLBACK_MODELS) reste en secours si ce modèle est saturé/indisponible.
+export function resolveModels(requested = null) {
   const primary = (process.env.GROQ_MODEL || "").trim() || DEFAULT_MODEL;
   const raw = (process.env.GROQ_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).trim();
-  if (/^(none|off|0|false)$/i.test(raw)) return [primary];
+  const configured = /^(none|off|0|false)$/i.test(raw)
+    ? [primary]
+    : [...new Set([primary, ...raw.split(",").map((m) => m.trim()).filter(Boolean)])];
 
-  const fallbacks = raw
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  return [...new Set([primary, ...fallbacks])];
+  if (!requested) return configured;
+  return [...new Set([requested, ...configured.filter((m) => m !== requested)])];
 }
 
 let cachedClient = null;
@@ -326,6 +340,11 @@ export default async function handler(req, res) {
     const history = sanitizeHistory(body?.messages, input);
     const client = getClient();
 
+    // Modèle demandé par l'interface : validé contre la liste blanche.
+    // Toute valeur inconnue/absente → chaîne configurée (comportement d'avant).
+    const rawModel = typeof body?.model === "string" ? body.model.trim() : "";
+    const requestedModel = rawModel && GROQ_CHAT_MODELS.has(rawModel) ? rawModel : null;
+
     const system = [
       MINERVA_PROMPT.trim(),
       "",
@@ -342,7 +361,7 @@ export default async function handler(req, res) {
       { role: "user", content: input },
     ];
 
-    const { reply, model, usage } = await createCompletion(client, messages, resolveModels());
+    const { reply, model, usage } = await createCompletion(client, messages, resolveModels(requestedModel));
 
     sendJson(res, 200, { reply, model, usage });
   } catch (error) {
