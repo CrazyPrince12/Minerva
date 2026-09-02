@@ -77,7 +77,13 @@
 
   <footer class="composer-wrap">
     <form id="chat-form" class="composer" autocomplete="off">
-        </select>
+      <label for="model-select" class="sr-only">Modèle</label>
+      <select id="model-select" class="model-select" aria-label="Choisir un modèle">
+        <option value="openai/gpt-oss-20b" data-provider="groq">GPT-OSS 20B</option>
+        <option value="openai/gpt-oss-120b" data-provider="groq">GPT-OSS 120B</option>
+        <option value="groq/compound" data-provider="groq">Groq Compound</option>
+        <option value="groq/compound-mini" data-provider="groq">Compound Mini</option>
+      </select>
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
         id="user-input"
