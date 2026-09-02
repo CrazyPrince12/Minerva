@@ -34,9 +34,9 @@ export const PROVIDERS = {
     temperatureEnv: "OPENROUTER_TEMPERATURE",
     maxTokensEnv: "OPENROUTER_MAX_TOKENS",
     defaultModel: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-    // Pas de secours par défaut : basculer vers un autre modèle changerait
-    // le comportement attendu du modèle sans filtre.
-    defaultFallbacks: "none",
+    // Fallback automatique : openrouter/free route vers un modèle gratuit disponible.
+    // Si Dolphin échoue, on essaie le router automatique avant d'abandonner.
+    defaultFallbacks: "openrouter/free",
     keyHint: "Ajoute OPENROUTER_API_KEY dans les variables d'environnement du projet, puis redéploie.",
   },
 };
