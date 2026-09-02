@@ -35,7 +35,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <link rel="stylesheet" href="/style.css?v=20260902-2" />
+  <link rel="stylesheet" href="/style.css?v=20260902-3" />
 
   <script>
     // Applique le thème avant le rendu pour éviter le flash.
@@ -77,24 +77,15 @@
 
   <footer class="composer-wrap">
     <form id="chat-form" class="composer" autocomplete="off">
-      <div class="model-picker" id="model-picker">
-        <button
-          id="model-btn"
-          class="model-btn"
-          type="button"
-          aria-haspopup="true"
-          aria-expanded="false"
-          aria-controls="model-menu"
-          title="Choisir le modèle IA"
-          aria-label="Choisir le modèle IA"
-        >
-          <i class="fa-solid fa-microchip" aria-hidden="true"></i>
-          <span id="model-label" class="model-label">GPT-OSS 20B</span>
-          <i class="fa-solid fa-chevron-down model-chevron" aria-hidden="true"></i>
-        </button>
-        <div id="model-menu" class="model-menu" role="menu" aria-label="Modèles IA disponibles" hidden></div>
-      </div>
-
+      <label for="model-select" class="sr-only">Modèle IA</label>
+      <select id="model-select" class="model-select" name="model" aria-label="Choisir le modèle IA">
+        <option value="openai/gpt-oss-20b" selected>GPT-OSS 20B</option>
+        <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+        <option value="groq/compound">Groq Compound</option>
+        <option value="groq/compound-mini">Compound Mini</option>
+      </select>
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
         id="user-input"
@@ -119,6 +110,6 @@
   </div>
 
   <!-- La version évite de réutiliser le JS incompatible mis en cache avant ce correctif. -->
-  <script src="/script.js?v=20260902-2" type="module"></script>
+  <script src="/script.js?v=20260902-3" type="module"></script>
 </body>
 </html>
