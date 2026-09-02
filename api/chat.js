@@ -9,24 +9,29 @@ import { buildSkillsSection } from "../src/skills.js";
 
 const MEMORY_WINDOW = 8;
 const DEFAULT_TEMPERATURE = Number.parseFloat(process.env.GROQ_TEMPERATURE || "0.7");
-const DEFAULT_MAX_TOKENS = Number.parseInt(process.env.GROQ_MAX_TOKENS || "2048", 10);
+const DEFAULT_MAX_TOKENS = Number.parseInt(process.env.GROQ_MAX_TOKENS || "4096", 10);
 // Budget global : on garde de la marge sous la limite de la fonction (30 s sur Vercel).
 const TOTAL_DEADLINE_MS = Number.parseInt(process.env.GROQ_DEADLINE_MS || "26000", 10);
 const ATTEMPTS_PER_MODEL = 2;
 
-// Chaîne de modèles : si le premier est saturé (429) ou indisponible, on bascule
-// automatiquement sur le suivant. Personnalisable via GROQ_MODEL / GROQ_FALLBACK_MODELS.
+// Modèle principal : openai/gpt-oss-20b (inchangé).
+// Le modèle de secours n'est utilisé QUE si le principal renvoie 429/5xx/404 :
+// il ne change rien au fonctionnement normal.
+// Désactiver les secours : GROQ_FALLBACK_MODELS=none
+const DEFAULT_MODEL = "openai/gpt-oss-20b";
+const DEFAULT_FALLBACK_MODELS = "llama-3.1-8b-instant";
+
 function resolveModels() {
-  const primary = (process.env.GROQ_MODEL || "").trim();
-  const fallbacks = (process.env.GROQ_FALLBACK_MODELS || "")
+  const primary = (process.env.GROQ_MODEL || "").trim() || DEFAULT_MODEL;
+  const raw = (process.env.GROQ_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).trim();
+  if (/^(none|off|0|false)$/i.test(raw)) return [primary];
+
+  const fallbacks = raw
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);
 
-  const chain = [primary, ...fallbacks].filter(Boolean);
-  if (chain.length) return [...new Set(chain)];
-
-  return ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  return [...new Set([primary, ...fallbacks])];
 }
 
 let cachedClient = null;

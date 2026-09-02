@@ -46,16 +46,14 @@ Supprimée (elle était créée en JS avec des styles inline). L'utilisateur n'a
 Quatre causes cumulées :
 
 1. `maxRetries: 0` sur le client OpenAI + aucun retry nulle part → le premier 429 était renvoyé tel quel à l'écran.
-2. `max_tokens: 4096` avec `openai/gpt-oss-20b` (modèle à raisonnement, lent et gourmand) : le quota de tokens/minute du palier gratuit part en une ou deux réponses.
-3. `vercel.json` : `maxDuration: 10` s, alors que le serveur attend Groq jusqu'à 60 s → la fonction était tuée avant la réponse ; le client attendait encore 65 s et la requête suivante se cumulait avec la précédente.
-4. Le dernier message utilisateur était envoyé **deux fois** (voir 1.5), donc ~2× plus de tokens pour rien.
+2. `vercel.json` : `maxDuration: 10` s, alors que le serveur attend Groq jusqu'à 60 s → la fonction était tuée avant la réponse ; le client attendait encore 65 s et la requête suivante se cumulait avec la précédente.
+3. Le dernier message utilisateur était envoyé **deux fois** (voir 1.5), donc ~2× plus de tokens pour rien.
 
-**Correctifs**
+**Correctifs** (le modèle et `max_tokens` restent ceux d'origine : `openai/gpt-oss-20b`, 4096)
 
-- Côté serveur : 2 tentatives par modèle avec backoff (respect de l'en-tête `Retry-After` de Groq), puis **bascule automatique** sur un modèle de secours. Budget global borné (`GROQ_DEADLINE_MS`, défaut 26 s).
-- Chaîne de modèles par défaut `llama-3.3-70b-versatile` → `llama-3.1-8b-instant`, configurable via `GROQ_MODEL` / `GROQ_FALLBACK_MODELS` (ton `.env` garde `openai/gpt-oss-20b` si tu veux le conserver).
-- `max_tokens` par défaut ramené de 4096 à 2048, fenêtre de mémoire de 10 → 8 messages.
+- Côté serveur : 2 tentatives sur le modèle principal avec backoff (respect de l'en-tête `Retry-After` de Groq), puis **bascule sur un modèle de secours uniquement en cas d'échec** (`llama-3.1-8b-instant`, désactivable avec `GROQ_FALLBACK_MODELS=none`). Budget global borné (`GROQ_DEADLINE_MS`, défaut 26 s).
 - `vercel.json` : `maxDuration` 10 s → 30 s ; timeout client aligné à 55 s.
+- Fenêtre de mémoire ramenée de 10 à 8 messages envoyés (40 conservés dans `localStorage`) : moins de tokens par requête, donc moins de 429. Remettre `MEMORY_WINDOW = 10` dans `api/chat.js` si tu préfères l'ancien comportement.
 - Côté client : jusqu'à 3 tentatives sur 429/5xx, avec affichage « Groq est saturé, nouvel essai dans X s » dans la bulle de réflexion au lieu d'un message d'erreur immédiat.
 - Le serveur renvoie l'en-tête `Retry-After` pour que le client patiente le temps exact demandé par Groq.
 

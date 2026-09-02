@@ -36,7 +36,7 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 | Icônes        | Font Awesome 6.5.2 (CDN) |
 | Backend       | Une seule fonction serverless `/api/chat.js` |
 | Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq |
-| Modèle        | `llama-3.3-70b-versatile` puis `llama-3.1-8b-instant` en secours (configurable via `GROQ_MODEL` / `GROQ_FALLBACK_MODELS`) |
+| Modèle        | `openai/gpt-oss-20b` (configurable via `GROQ_MODEL`), avec `llama-3.1-8b-instant` en secours uniquement si le principal renvoie 429/5xx |
 | Hébergement   | Vercel (fonction serverless) et Render (service Node) |
 | Secrets       | `process.env.GROQ_API_KEY`, jamais exposé au client |
 
@@ -115,10 +115,10 @@ L'application est disponible sur **<http://localhost:3000>**.
 | Variable               | Obligatoire | Défaut                                                | Description |
 | ---------------------- | ----------- | ----------------------------------------------------- | ----------- |
 | `GROQ_API_KEY`         | oui         | —                                                     | Clé API Groq (jamais côté client). |
-| `GROQ_MODEL`           | non         | `llama-3.3-70b-versatile`                             | Modèle Groq principal. |
-| `GROQ_FALLBACK_MODELS` | non         | `llama-3.1-8b-instant`                                | Modèles de secours, séparés par des virgules. |
+| `GROQ_MODEL`           | non         | `openai/gpt-oss-20b`                                  | Modèle Groq principal. |
+| `GROQ_FALLBACK_MODELS` | non         | `llama-3.1-8b-instant`                                | Modèles de secours (uniquement si le principal renvoie 429/5xx/404). `none` pour désactiver. |
 | `GROQ_TEMPERATURE`     | non         | `0.7`                                                 | Température de génération. |
-| `GROQ_MAX_TOKENS`      | non         | `2048`                                                | Nombre max de tokens de sortie. |
+| `GROQ_MAX_TOKENS`      | non         | `4096`                                                | Nombre max de tokens de sortie. |
 | `GROQ_DEADLINE_MS`     | non         | `26000`                                               | Budget total d'une requête côté serveur (doit rester < `maxDuration`). |
 | `PORT`                 | non         | `3000`                                                | Port du serveur (utilisé par Render). |
 
