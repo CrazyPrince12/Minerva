@@ -3,7 +3,14 @@
 
 const STORAGE_KEY = "minerva.history.v1";
 const THEME_KEY = "minerva.theme";
-const MEMORY_LIMIT = 10;
+
+// Nombre de messages conservés dans localStorage (affichage au rechargement).
+const STORED_MESSAGES = 40;
+// Fenêtre de contexte envoyée au serveur (plus petite = moins de tokens = moins de 429).
+const CONTEXT_WINDOW = 8;
+// Tentatives côté client quand Groq renvoie 429/5xx.
+const MAX_ATTEMPTS = 3;
+const REQUEST_TIMEOUT_MS = 55_000;
 
 const elements = {
   messages: document.getElementById("messages"),
@@ -18,11 +25,12 @@ const elements = {
   themeIconLight: document.getElementById("theme-icon-light"),
   errorToast: document.getElementById("error-toast"),
   thinking: document.getElementById("thinking"),
+  thinkingText: document.getElementById("thinking-text"),
 };
 
 let history = loadHistory();
 let isThinking = false;
-let hideGreetingUntil = 0;
+let toastTimer = null;
 
 /* ------------------------------------------------------------------ */
 /* Storage helpers                                                     */
@@ -32,7 +40,14 @@ function loadHistory() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((m) => m && m.role && typeof m.content === "string") : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+        ts: Number.isFinite(m.ts) ? m.ts : Date.now(),
+      }));
   } catch {
     return [];
   }
@@ -40,7 +55,7 @@ function loadHistory() {
 
 function saveHistory() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(-MEMORY_LIMIT)));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(-STORED_MESSAGES)));
   } catch {
     // localStorage indisponible (privé / quota) : on continue en mémoire.
   }
@@ -59,10 +74,10 @@ function createId() {
 /* ------------------------------------------------------------------ */
 
 function updateThemeIcons() {
-  const theme = document.documentElement.dataset.theme;
-  const dark = theme === "dark";
-  elements.themeIconDark.hidden = dark;
-  elements.themeIconLight.hidden = !dark;
+  const dark = document.documentElement.dataset.theme === "dark";
+  // En thème sombre on affiche la lune (icône = thème actuel).
+  elements.themeIconDark.hidden = !dark;
+  elements.themeIconLight.hidden = dark;
   elements.themeToggle.setAttribute("aria-label", dark ? "Passer au thème clair" : "Passer au thème sombre");
   elements.themeToggle.setAttribute("title", dark ? "Passer au thème clair" : "Passer au thème sombre");
 }
@@ -82,23 +97,22 @@ elements.themeToggle.addEventListener("click", toggleTheme);
 updateThemeIcons();
 
 /* ------------------------------------------------------------------ */
-/* Greeting contextuel selon l'heure locale                             */
+/* Message d'accueil contextuel selon l'heure locale (sans emoji)       */
 /* ------------------------------------------------------------------ */
 
 const GREETINGS = [
-  { start: 5, end: 12, options: ["Bonjour, bien réveillé ? ☕", "Bonjour, prêt à attaquer la journée ? ☀️", "Salut ! Tu démarres du bon pied ? ✨"] },
-  { start: 12, end: 14, options: ["Bon après-midi, cher ami 😊", "Bonjour, on est déjà à midi ? Le temps file !"] },
+  { start: 5, end: 12, options: ["Bonjour, bien réveillé ?", "Bonjour, prêt à attaquer la journée ?", "Salut ! Tu démarres du bon pied ?"] },
+  { start: 12, end: 14, options: ["Bon après-midi, cher ami", "Bonjour, on est déjà à midi ? Le temps file !"] },
   { start: 14, end: 18, options: ["L'après-midi avance bien ?", "Salut, belle après-midi ! Une question ?"] },
-  { start: 18, end: 22, options: ["Bonsoir, comment se passe ta soirée ? 🌙", "Bonsoir ! On termine la journée en beauté ?"] },
-  { start: 22, end: 24, options: ["Salut couche-tard, on veille ensemble ? 🌌", "Salut la nuit ! Qu'est-ce qu'on explore ?"] },
-  { start: 0, end: 5, options: ["Salut couche-tard, on veille ensemble ? 🌌", "Encore debout ? Qu'est-ce qu'on fait ?"] },
+  { start: 18, end: 22, options: ["Bonsoir, comment se passe ta soirée ?", "Bonsoir ! On termine la journée en beauté ?"] },
+  { start: 22, end: 24, options: ["Salut couche-tard, on veille ensemble ?", "Salut la nuit ! Qu'est-ce qu'on explore ?"] },
+  { start: 0, end: 5, options: ["Salut couche-tard, on veille ensemble ?", "Encore debout ? Qu'est-ce qu'on fait ?"] },
 ];
 
 function getGreeting() {
   const hour = new Date().getHours();
   const bucket = GREETINGS.find((g) => hour >= g.start && hour < g.end) || GREETINGS[0];
-  const key = `${bucket.start}-${Math.floor(hour / 4)}`;
-  const rotated = (key.length * 7 + hour) % bucket.options.length;
+  const rotated = (hour + bucket.start) % bucket.options.length;
   return bucket.options[rotated];
 }
 
@@ -110,33 +124,57 @@ function renderGreeting() {
 /* UI helpers                                                          */
 /* ------------------------------------------------------------------ */
 
-function formatTime(date = new Date()) {
+function formatTime(value) {
+  const date = value instanceof Date ? value : new Date(Number(value) || Date.now());
   return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function showToast(message, action) {
-  elements.errorToast.innerHTML = "";
-  const strong = document.createElement("strong");
-  strong.textContent = "⚠️ ";
-  strong.append(document.createTextNode(message));
-  elements.errorToast.append(strong);
-  if (action) {
-    const span = document.createElement("span");
-    span.textContent = ` ${action}`;
-    elements.errorToast.append(span);
-  }
-  elements.errorToast.hidden = false;
-  setTimeout(() => {
-    elements.errorToast.hidden = true;
-  }, 8000);
+function icon(className) {
+  const el = document.createElement("i");
+  el.className = className;
+  el.setAttribute("aria-hidden", "true");
+  return el;
 }
 
-function clearError() {
+function showToast(message, action) {
+  clearTimeout(toastTimer);
+  elements.errorToast.innerHTML = "";
+
+  const body = document.createElement("div");
+  body.className = "toast-body";
+
+  const title = document.createElement("strong");
+  title.textContent = message;
+  body.append(title);
+
+  if (action) {
+    const span = document.createElement("span");
+    span.className = "toast-action";
+    span.textContent = action;
+    body.append(span);
+  }
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "toast-close";
+  close.setAttribute("aria-label", "Fermer le message");
+  close.append(icon("fa-solid fa-xmark"));
+  close.addEventListener("click", hideToast);
+
+  elements.errorToast.append(icon("fa-solid fa-triangle-exclamation"), body, close);
+  elements.errorToast.hidden = false;
+
+  toastTimer = setTimeout(hideToast, 8000);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
   elements.errorToast.hidden = true;
 }
 
 function scrollToBottom(force = false) {
   const chat = elements.messages.parentElement;
+  if (!chat) return;
   const nearBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160;
   if (force || nearBottom) {
     requestAnimationFrame(() => {
@@ -153,6 +191,23 @@ function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value;
   return div.innerHTML;
+}
+
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+    if (signal) {
+      if (signal.aborted) return onAbort();
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,7 +228,7 @@ function escapeCode(code) {
 function highlightCode(code, lang = "") {
   const normalized = String(lang).toLowerCase();
   const safe = escapeCode(code);
-  const tokens = LANGUAGE_KEYWORDS[normalized] ? LANGUAGE_KEYWORDS[normalized].source.replace(/\\b/g, "\\b") : null;
+  const tokens = LANGUAGE_KEYWORDS[normalized] ? LANGUAGE_KEYWORDS[normalized].source.replace(/\\\\b/g, "\\b") : null;
 
   let highlighted = safe;
   if (tokens) {
@@ -213,7 +268,8 @@ function renderCodeBlock(code, lang = "") {
   copy.className = "copy-code";
   copy.type = "button";
   copy.dataset.copyCode = "";
-  copy.textContent = "Copier";
+  copy.setAttribute("aria-label", "Copier le code");
+  copy.append(icon("fa-regular fa-copy"), document.createTextNode("Copier"));
 
   header.append(langSpan, copy);
 
@@ -242,7 +298,7 @@ function renderTable(rows) {
   const tbody = document.createElement("tbody");
   rows.slice(1).forEach((row) => {
     const tr = document.createElement("tr");
-    row.forEach((cell, i) => {
+    row.forEach((cell) => {
       const td = document.createElement("td");
       td.textContent = cell.trim();
       td.style.cssText = "border:1px solid var(--border);padding:7px 10px;";
@@ -254,19 +310,18 @@ function renderTable(rows) {
   return table;
 }
 
-function parseNodes(markdown, container, inline = false) {
+function parseNodes(markdown, container) {
   // Lignes de tableau
   const tableRegex = /^\|.+\|\s*$/gm;
-  let tableMatches = [];
+  const tableMatches = [];
   let tableCounter = 0;
-  let tableStripped = markdown.replace(tableRegex, (match) => {
-    const idx = tableCounter++;
+  const tableStripped = markdown.replace(tableRegex, (match) => {
     tableMatches.push(match);
-    return `\u0000TABLE${idx}\u0000`;
+    return `\u0000TABLE${tableCounter++}\u0000`;
   });
 
   const blockRegex = /```([^\n]*)\n([\s\S]*?)```/g;
-  let codeBlocks = [];
+  const codeBlocks = [];
   const codeStripped = tableStripped.replace(blockRegex, (match, lang, code) => {
     const idx = codeBlocks.length;
     codeBlocks.push({ code: code.replace(/\n$/, ""), lang: lang.trim() });
@@ -352,7 +407,6 @@ function parseNodes(markdown, container, inline = false) {
 function inlineMarkdown(text) {
   let html = escapeHtml(text);
 
-  // Blocs => pour le rendre re-parse par inline (lien/images)
   const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
   html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
@@ -362,7 +416,7 @@ function inlineMarkdown(text) {
   const italicRegex = /(?<!\*)\*([^*\n]+)\*(?!\*)|(?<![_])_([^_\n]+)_(?![_])/g;
   html = html.replace(italicRegex, "<em>$1$2</em>");
 
-  // Code inline après avoir échappé les accents, pour éviter de casser les balises.
+  // Code inline après le gras/italique, pour éviter de casser les balises.
   const codeRegex = /`([^`\n]+)`/g;
   html = html.replace(codeRegex, '<code class="inline-code">$1</code>');
 
@@ -375,28 +429,13 @@ function renderMarkdown(container, text) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Message rendering                                                    */
+/* Rendu des messages (ordre chronologique : toujours append)           */
 /* ------------------------------------------------------------------ */
 
-function appendMessage(role, content, options = {}) {
+function buildMessage(role, content, options = {}) {
   const msg = document.createElement("div");
-  const roleClass = role === "assistant" ? "bot" : "user";
-  msg.className = `msg msg-${roleClass}`;
+  msg.className = `msg msg-${role === "assistant" ? "bot" : "user"}`;
   msg.dataset.messageId = options.id || createId();
-
-  const avatar = document.createElement("img");
-  avatar.className = "msg-avatar";
-  avatar.src = "/assets/logo.svg";
-  avatar.alt = "";
-  if (role === "user") {
-    const userAvatar = document.createElement("div");
-    userAvatar.className = "msg-avatar msg-avatar-user";
-    userAvatar.style.cssText = "background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;";
-    userAvatar.textContent = "Moi";
-    msg.append(userAvatar);
-  } else {
-    msg.append(avatar);
-  }
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "msg-content";
@@ -410,7 +449,7 @@ function appendMessage(role, content, options = {}) {
 
   const time = document.createElement("span");
   time.className = "msg-time";
-  time.textContent = formatTime(options.date || new Date());
+  time.textContent = formatTime(options.ts);
 
   meta.append(roleSpan, time);
 
@@ -432,21 +471,39 @@ function appendMessage(role, content, options = {}) {
   copyMsg.className = "copy-msg";
   copyMsg.type = "button";
   copyMsg.dataset.copyMessage = "";
-  copyMsg.textContent = "Copier";
+  copyMsg.setAttribute("aria-label", "Copier le message");
+  copyMsg.append(icon("fa-regular fa-copy"), document.createTextNode("Copier"));
   actions.append(copyMsg);
 
   contentWrap.append(actions);
+
+  if (role === "assistant") {
+    const avatar = document.createElement("img");
+    avatar.className = "msg-avatar";
+    avatar.src = "/assets/logo.svg";
+    avatar.alt = "";
+    avatar.width = 34;
+    avatar.height = 34;
+    msg.append(avatar);
+  }
+
   msg.append(contentWrap);
+  return msg;
+}
 
-  if (options.append) elements.messages.append(msg);
-  else elements.messages.prepend(msg);
-
+function appendMessage(role, content, options = {}) {
+  // Le DOM est la source de vérité de l'ordre : on ajoute toujours à la fin.
+  // Aucun prepend : le premier enfant reste le message le plus ancien.
+  const msg = buildMessage(role, content, options);
+  elements.messages.append(msg);
   scrollToBottom(true);
   syncEmptyState();
   return msg;
 }
 
 function appendTyping() {
+  removeTyping();
+
   const msg = document.createElement("div");
   msg.className = "msg msg-bot msg-typing";
   msg.id = "typing-message";
@@ -455,6 +512,8 @@ function appendTyping() {
   avatar.className = "msg-avatar";
   avatar.src = "/assets/logo.svg";
   avatar.alt = "";
+  avatar.width = 34;
+  avatar.height = 34;
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "msg-content";
@@ -472,38 +531,53 @@ function appendTyping() {
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
   bubble.setAttribute("aria-hidden", "true");
-  bubble.innerHTML = `<span>Minerva réfléchit</span><span class="typing-dots"><span></span><span></span><span></span></span>`;
 
+  const label = document.createElement("span");
+  label.id = "typing-label";
+  label.textContent = "Minerva réfléchit";
+
+  const dots = document.createElement("span");
+  dots.className = "typing-dots";
+  dots.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+
+  bubble.append(label, dots);
   contentWrap.append(meta, bubble);
   msg.append(avatar, contentWrap);
+
   elements.messages.append(msg);
   scrollToBottom(true);
   return msg;
 }
 
+function setTypingLabel(text) {
+  const label = document.getElementById("typing-label");
+  if (label) label.textContent = text;
+}
+
 function removeTyping() {
-  const typing = document.getElementById("typing-message");
-  if (typing) typing.remove();
+  document.getElementById("typing-message")?.remove();
 }
 
 function syncEmptyState() {
   const hasMessages = elements.messages.children.length > 0;
-  elements.greeting.hidden = hasMessages;
-  // On garde le conteneur mais on masque visuellement pour l'accès.
   elements.emptyState.hidden = hasMessages;
+  elements.greeting.hidden = hasMessages;
 }
 
 /* ------------------------------------------------------------------ */
-/* Copy helpers                                                        */
+/* Copie                                                               */
 /* ------------------------------------------------------------------ */
 
 async function copyText(text, button) {
-  const original = button.textContent;
+  const label = button.lastChild;
+  const original = label && label.nodeType === Node.TEXT_NODE ? label.textContent : "Copier";
+  let ok = false;
+
   try {
     await navigator.clipboard.writeText(text);
-    button.textContent = "Copié !";
+    ok = true;
   } catch {
-    // Fallback pour anciens navigateurs / HTTPS strict.
+    // Fallback pour anciens navigateurs / contexte non sécurisé.
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -511,15 +585,18 @@ async function copyText(text, button) {
     document.body.append(ta);
     ta.select();
     try {
-      document.execCommand("copy");
-      button.textContent = "Copié !";
+      ok = document.execCommand("copy");
     } catch {
-      button.textContent = "Erreur";
+      ok = false;
     }
     ta.remove();
   }
+
+  if (label && label.nodeType === Node.TEXT_NODE) {
+    label.textContent = ok ? "Copié !" : "Erreur";
+  }
   setTimeout(() => {
-    button.textContent = original || "Copier";
+    if (label && label.nodeType === Node.TEXT_NODE) label.textContent = original;
   }, 1800);
 }
 
@@ -547,6 +624,7 @@ function setThinking(state) {
   elements.sendBtn.disabled = state;
   elements.sendBtn.setAttribute("aria-busy", state ? "true" : "false");
   elements.thinking.classList.toggle("sr-only", !state);
+  if (state) elements.thinkingText.textContent = "Minerva réfléchit…";
 }
 
 function autoResize() {
@@ -564,66 +642,110 @@ elements.input.addEventListener("keydown", (event) => {
   }
 });
 
+async function requestReply(payload, signal) {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (response.ok && data?.reply) return data;
+
+  const error = new Error(data?.error?.message || "Réponse inattendue du serveur.");
+  error.status = response.status;
+  error.code = data?.error?.code || "server_error";
+  error.action = data?.error?.action || "";
+  const retryAfter = Number(response.headers.get("Retry-After") || data?.retryAfter || 0);
+  error.retryAfter = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0;
+  throw error;
+}
+
 async function sendMessage(input) {
   if (!input || isThinking) return;
 
-  const userMessage = { role: "user", content: input };
+  const now = Date.now();
+  const userMessage = { role: "user", content: input, ts: now };
   history.push(userMessage);
   saveHistory();
 
-  appendMessage("user", input, { date: new Date() });
-  hideGreetingUntil = Date.now() + 120000;
+  appendMessage("user", input, { ts: now });
   syncEmptyState();
 
   setThinking(true);
-  clearError();
-  const typing = appendTyping();
+  hideToast();
+  appendTyping();
+  scrollToBottom(true);
 
-  const payload = {
-    input,
-    messages: history.slice(-MEMORY_LIMIT),
-  };
+  // Contexte = messages précédents uniquement (le serveur ajoute le message courant).
+  const context = history.slice(0, -1).slice(-CONTEXT_WINDOW).map(({ role, content }) => ({ role, content }));
+  const payload = { input, messages: context };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 65000);
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let reply = null;
+  let lastError = null;
 
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const data = await requestReply(payload, controller.signal);
+        reply = data.reply;
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        const retriable = attempt < MAX_ATTEMPTS && (error.status === 429 || error.status >= 500);
+        if (!retriable) break;
 
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok || !data?.reply) {
-      const err = data?.error || {};
-      throw new Error(err.message || "Réponse inattendue du serveur.");
+        const waitMs = Math.min(Math.max(error.retryAfter * 1000, 1200 * attempt), 8000);
+        setTypingLabel(`Groq est saturé, nouvel essai dans ${Math.ceil(waitMs / 1000)} s`);
+        await sleep(waitMs, controller.signal);
+        setTypingLabel("Minerva réfléchit");
+      }
     }
 
-    const botMessage = { role: "assistant", content: data.reply };
-    history.push(botMessage);
-    saveHistory();
+    if (reply) {
+      const ts = Date.now();
+      history.push({ role: "assistant", content: reply, ts });
+      saveHistory();
 
-    removeTyping();
-    appendMessage("assistant", data.reply, { date: new Date() });
-    clearError();
+      removeTyping();
+      appendMessage("assistant", reply, { ts });
+      hideToast();
+      return;
+    }
+
+    // Échec : on remet le texte dans le champ pour ne pas le perdre.
+    throw lastError || new Error("Une erreur est survenue.");
   } catch (error) {
     removeTyping();
-    clearError();
+    hideToast();
 
-    if (error.name === "AbortError" || controller.signal.aborted) {
+    if (error.name === "AbortError") {
       showToast("Minerva a mis trop de temps à répondre.", "Réessaie dans quelques secondes.");
-    } else if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    } else if (error instanceof TypeError) {
       showToast("Impossible de joindre le serveur.", "Vérifie ta connexion puis réessaie.");
+    } else if (error.status === 429) {
+      showToast(
+        error.message || "Limite atteinte : Groq reçoit trop de requêtes.",
+        error.action || "Patiente quelques secondes, la réponse arrive automatiquement au prochain essai."
+      );
     } else {
-      showToast(error.message || "Une erreur est survenue.", "Réessaie dans quelques secondes.");
+      showToast(error.message || "Une erreur est survenue.", error.action || "Réessaie dans quelques secondes.");
     }
+
+    if (!elements.input.value.trim()) elements.input.value = input;
   } finally {
     clearTimeout(timeout);
     setThinking(false);
-    elements.input.value = "";
     autoResize();
     elements.input.focus();
     scrollToBottom();
@@ -634,17 +756,20 @@ elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
   const value = elements.input.value.trim();
   if (!value) return;
+  elements.input.value = "";
+  autoResize();
   sendMessage(value);
 });
 
 function clearConversation() {
   history = [];
   saveHistory();
-  elements.messages.innerHTML = "";
-  elements.messages.append(); // reset
-  hideGreetingUntil = Date.now() + 3000;
+  elements.messages.replaceChildren();
   renderGreeting();
   syncEmptyState();
+  hideToast();
+  elements.input.value = "";
+  autoResize();
   elements.input.focus();
 }
 
@@ -655,25 +780,18 @@ elements.clearBtn.addEventListener("click", clearConversation);
 /* ------------------------------------------------------------------ */
 
 function restoreHistory() {
-  if (!history.length) return;
+  // Ordre d'insertion = ordre chronologique (le plus ancien en haut).
   for (const m of history) {
-    appendMessage(m.role, m.content, { date: new Date() });
+    elements.messages.append(buildMessage(m.role, m.content, { ts: m.ts }));
   }
 }
 
 function init() {
-  scrollToBottom(true);
   renderGreeting();
   restoreHistory();
   syncEmptyState();
   autoResize();
+  requestAnimationFrame(() => scrollToBottom(true));
 }
-
-// Ré-affiche le message d'accueil si on revient du haut d'une conversation vide.
-setInterval(() => {
-  if (!elements.messages.children.length && Date.now() < hideGreetingUntil) {
-    renderGreeting();
-  }
-}, 30000);
 
 init();
