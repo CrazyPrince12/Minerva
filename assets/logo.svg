@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Logo Minerva">
+  <title>Minerva</title>
+  <circle cx="60" cy="60" r="56" fill="#12141b"/>
+  <path d="M60 22l27 10-3 28c-4 18-15 27-24 30-9-3-20-12-24-30l-3-28z" fill="#8a6cff"/>
+  <path d="M31 32c9-5 18-8 29-6 11-2 20 1 29 6" fill="none" stroke="#12141b" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="44" cy="60" r="12.5" fill="#f8f9ff"/>
+  <circle cx="76" cy="60" r="12.5" fill="#f8f9ff"/>
+  <circle cx="44" cy="61" r="5" fill="#12141b"/>
+  <circle cx="76" cy="61" r="5" fill="#12141b"/>
+  <circle cx="46" cy="58" r="1.6" fill="#f8f9ff"/>
+  <circle cx="78" cy="58" r="1.6" fill="#f8f9ff"/>
+  <path d="M60 73c-4 0-7 3-7 7 2 3 5 4 7 4s5-1 7-4c0-4-3-7-7-7z" fill="#f8f9ff"/>
+  <path d="M78 28l6 8-8-1z" fill="#12141b"/>
+  <path d="M42 28l-6 8 8-1z" fill="#12141b"/>
+</svg>
