@@ -3,6 +3,7 @@
 
 const STORAGE_KEY = "minerva.history.v1";
 const THEME_KEY = "minerva.theme";
+const MODEL_KEY = "minerva.model.v1";
 
 // Nombre de messages conservés dans localStorage (affichage au rechargement).
 const STORED_MESSAGES = 40;
@@ -11,6 +12,54 @@ const CONTEXT_WINDOW = 8;
 // Tentatives côté client quand Groq renvoie 429/5xx.
 const MAX_ATTEMPTS = 3;
 const REQUEST_TIMEOUT_MS = 55_000;
+
+/* ------------------------------------------------------------------ */
+/* Modèles Groq de production (https://console.groq.com/docs/models)   */
+/* Whisper est volontairement exclu : transcription audio, pas un       */
+/* modèle de conversation utilisable pour le chat.                      */
+/* ------------------------------------------------------------------ */
+
+const MODELS = [
+  { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", speed: "1 000 t/s", blurb: "Le plus rapide, idéal au quotidien" },
+  { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", speed: "500 t/s", blurb: "Le plus puissant pour le raisonnement" },
+  { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B", speed: "560 t/s", blurb: "Très rapide, léger et réactif" },
+  { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", speed: "280 t/s", blurb: "Excellente qualité, plus patient" },
+  { id: "groq/compound", name: "Groq Compound", speed: "450 t/s", blurb: "Agentique : recherche web + code" },
+  { id: "groq/compound-mini", name: "Compound Mini", speed: "450 t/s", blurb: "Agentique compact (web + code)" },
+];
+
+// Modèle par défaut : celui du backend (GROQ_MODEL).
+const DEFAULT_MODEL = "openai/gpt-oss-20b";
+
+function modelById(id) {
+  return MODELS.find((m) => m.id === id) || null;
+}
+
+function loadModel() {
+  try {
+    const stored = localStorage.getItem(MODEL_KEY);
+    if (stored && modelById(stored)) return stored;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_MODEL;
+}
+
+function saveModel(id) {
+  try {
+    localStorage.setItem(MODEL_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+function modelName(id) {
+  const m = modelById(id);
+  if (m) return m.name;
+  // Modèle inconnu (ex. réponse du serveur via un modèle de secours) :
+  // on affiche l'id raccourci, sans casser l'interface.
+  return String(id || "").split("/").pop() || "IA";
+}
 
 const elements = {
   messages: document.getElementById("messages"),
@@ -25,11 +74,16 @@ const elements = {
   errorToast: document.getElementById("error-toast"),
   thinking: document.getElementById("thinking"),
   thinkingText: document.getElementById("thinking-text"),
+  modelPicker: document.getElementById("model-picker"),
+  modelBtn: document.getElementById("model-btn"),
+  modelLabel: document.getElementById("model-label"),
+  modelMenu: document.getElementById("model-menu"),
 };
 
 let history = loadHistory();
 let isThinking = false;
 let toastTimer = null;
+let selectedModel = loadModel();
 
 /* ------------------------------------------------------------------ */
 /* Storage helpers                                                     */
@@ -46,6 +100,8 @@ function loadHistory() {
         role: m.role,
         content: m.content,
         ts: Number.isFinite(m.ts) ? m.ts : Date.now(),
+        // Modèle qui a réellement répondu (pour l'étiquette de la méta).
+        model: typeof m.model === "string" && m.model ? m.model : undefined,
       }));
   } catch {
     return [];
@@ -100,6 +156,146 @@ function toggleTheme() {
 
 elements.themeToggle?.addEventListener("click", toggleTheme);
 updateThemeIcons();
+
+/* ------------------------------------------------------------------ */
+/* Sélecteur de modèle IA (dans la barre de saisie)                    */
+/* ------------------------------------------------------------------ */
+
+let modelMenuOpen = false;
+
+function buildModelMenu() {
+  elements.modelMenu.replaceChildren();
+  for (const m of MODELS) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "model-option";
+    item.dataset.modelId = m.id;
+    item.setAttribute("role", "menuitemradio");
+    item.setAttribute("aria-checked", m.id === selectedModel ? "true" : "false");
+    if (m.id === selectedModel) item.classList.add("model-option-active");
+
+    const top = document.createElement("span");
+    top.className = "model-opt-top";
+
+    const name = document.createElement("span");
+    name.className = "model-opt-name";
+    name.textContent = m.name;
+
+    const speed = document.createElement("span");
+    speed.className = "model-speed";
+    speed.textContent = m.speed;
+
+    const check = document.createElement("span");
+    check.className = "model-check";
+    check.append(icon("fa-solid fa-check"));
+
+    top.append(name, speed, check);
+
+    const blurb = document.createElement("span");
+    blurb.className = "model-blurb";
+    blurb.textContent = m.blurb;
+
+    const idLine = document.createElement("span");
+    idLine.className = "model-opt-id";
+    idLine.textContent = m.id;
+
+    item.append(top, blurb, idLine);
+    elements.modelMenu.append(item);
+  }
+}
+
+function setModelLabel() {
+  elements.modelLabel.textContent = modelName(selectedModel);
+  elements.modelBtn.title = `Modèle actuel : ${selectedModel}`;
+}
+
+function openModelMenu() {
+  if (modelMenuOpen) return;
+  modelMenuOpen = true;
+  elements.modelMenu.hidden = false;
+  elements.modelBtn.setAttribute("aria-expanded", "true");
+  elements.modelBtn.classList.add("model-btn-open");
+}
+
+function closeModelMenu(returnFocus = true) {
+  if (!modelMenuOpen) return;
+  modelMenuOpen = false;
+  elements.modelMenu.hidden = true;
+  elements.modelBtn.setAttribute("aria-expanded", "false");
+  elements.modelBtn.classList.remove("model-btn-open");
+  if (returnFocus) elements.modelBtn.focus();
+}
+
+function selectModel(id) {
+  if (!modelById(id)) return;
+  selectedModel = id;
+  saveModel(id);
+  setModelLabel();
+  // Met à jour l'état « sélectionné » sans reconstruire le menu.
+  for (const item of elements.modelMenu.querySelectorAll(".model-option")) {
+    const active = item.dataset.modelId === id;
+    item.classList.toggle("model-option-active", active);
+    item.setAttribute("aria-checked", active ? "true" : "false");
+  }
+  closeModelMenu();
+}
+
+function initModelPicker() {
+  if (!elements.modelPicker || !elements.modelBtn || !elements.modelMenu) return;
+
+  buildModelMenu();
+  setModelLabel();
+
+  elements.modelBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (modelMenuOpen) closeModelMenu();
+    else openModelMenu();
+  });
+
+  elements.modelMenu.addEventListener("click", (event) => {
+    const option = event.target.closest(".model-option");
+    if (option) selectModel(option.dataset.modelId);
+  });
+
+  // Fermeture au clic hors du sélecteur.
+  document.addEventListener("click", (event) => {
+    if (modelMenuOpen && !event.target.closest("#model-picker")) closeModelMenu(false);
+  });
+
+  // Clavier : Échap ferme, flèches naviguent dans la liste.
+  elements.modelPicker.addEventListener("keydown", (event) => {
+    if (!modelMenuOpen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        openModelMenu();
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeModelMenu();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const options = [...elements.modelMenu.querySelectorAll(".model-option")];
+      if (!options.length) return;
+      const current = options.findIndex((o) => o.classList.contains("model-option-active"));
+      const next =
+        event.key === "ArrowDown"
+          ? (current + 1) % options.length
+          : (current - 1 + options.length) % options.length;
+      options[next].focus();
+    }
+    if (event.key === "Enter" && event.target.classList.contains("model-option")) {
+      event.preventDefault();
+      selectModel(event.target.dataset.modelId);
+    }
+    if (event.key === "Tab") closeModelMenu(false);
+  });
+}
+
+initModelPicker();
 
 /* ------------------------------------------------------------------ */
 /* Message d'accueil contextuel selon l'heure locale (sans emoji)       */
@@ -461,6 +657,17 @@ function buildMessage(role, content, options = {}) {
     time.textContent = formatTime(options.ts);
 
     meta.append(roleSpan, time);
+
+    // Petite étiquette du modèle Groq qui a répondu (celui effectivement
+    // utilisé côté serveur, éventuellement un modèle de secours).
+    if (options.model) {
+      const modelTag = document.createElement("span");
+      modelTag.className = "msg-model";
+      modelTag.title = options.model;
+      modelTag.append(icon("fa-solid fa-microchip"), document.createTextNode(modelName(options.model)));
+      meta.append(modelTag);
+    }
+
     contentWrap.append(meta);
   }
 
@@ -707,7 +914,7 @@ async function sendMessage(input) {
 
   // Contexte = messages précédents uniquement (le serveur ajoute le message courant).
   const context = history.slice(0, -1).slice(-CONTEXT_WINDOW).map(({ role, content }) => ({ role, content }));
-  const payload = { input, messages: context };
+  const payload = { input, messages: context, model: selectedModel };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -735,11 +942,14 @@ async function sendMessage(input) {
 
     if (reply) {
       const ts = Date.now();
-      history.push({ role: "assistant", content: reply, ts });
+      // `data.model` = le modèle Groq qui a réellement répondu (peut différer
+      // du modèle demandé si un secours a dû prendre le relais).
+      const usedModel = data.model;
+      history.push({ role: "assistant", content: reply, ts, model: usedModel });
       saveHistory();
 
       removeTyping();
-      appendMessage("assistant", reply, { ts });
+      appendMessage("assistant", reply, { ts, model: usedModel });
       hideToast();
       return;
     }
@@ -803,7 +1013,7 @@ elements.clearBtn.addEventListener("click", clearConversation);
 function restoreHistory() {
   // Ordre d'insertion = ordre chronologique (le plus ancien en haut).
   for (const m of history) {
-    elements.messages.append(buildMessage(m.role, m.content, { ts: m.ts }));
+    elements.messages.append(buildMessage(m.role, m.content, { ts: m.ts, model: m.model }));
   }
 }
 

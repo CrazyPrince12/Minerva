@@ -35,7 +35,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <link rel="stylesheet" href="/style.css?v=20260902-1" />
+  <link rel="stylesheet" href="/style.css?v=20260902-2" />
 
   <script>
     // Applique le thème avant le rendu pour éviter le flash.
@@ -77,6 +77,24 @@
 
   <footer class="composer-wrap">
     <form id="chat-form" class="composer" autocomplete="off">
+      <div class="model-picker" id="model-picker">
+        <button
+          id="model-btn"
+          class="model-btn"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="model-menu"
+          title="Choisir le modèle IA"
+          aria-label="Choisir le modèle IA"
+        >
+          <i class="fa-solid fa-microchip" aria-hidden="true"></i>
+          <span id="model-label" class="model-label">GPT-OSS 20B</span>
+          <i class="fa-solid fa-chevron-down model-chevron" aria-hidden="true"></i>
+        </button>
+        <div id="model-menu" class="model-menu" role="menu" aria-label="Modèles IA disponibles" hidden></div>
+      </div>
+
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
         id="user-input"
@@ -101,6 +119,6 @@
   </div>
 
   <!-- La version évite de réutiliser le JS incompatible mis en cache avant ce correctif. -->
-  <script src="/script.js?v=20260902-1" type="module"></script>
+  <script src="/script.js?v=20260902-2" type="module"></script>
 </body>
 </html>
