@@ -4,8 +4,6 @@
 const STORAGE_KEY = "minerva.history.v1";
 const THEME_KEY = "minerva.theme";
 const MODEL_KEY = "minerva.model.v1";
-// Modèle par défaut si le <select> est absent (ex. vieux HTML en cache).
-const DEFAULT_MODEL = "openai/gpt-oss-20b";
 
 // Nombre de messages conservés dans localStorage (affichage au rechargement).
 const STORED_MESSAGES = 40;
@@ -83,10 +81,7 @@ function initModelSelect() {
     /* localStorage indisponible : on garde le modèle par défaut. */
   }
 
-  syncModelState();
-
   elements.modelSelect.addEventListener("change", () => {
-    syncModelState();
     try {
       localStorage.setItem(MODEL_KEY, elements.modelSelect.value);
     } catch {
@@ -95,28 +90,8 @@ function initModelSelect() {
   });
 }
 
-function getSelectedOption() {
-  const select = elements.modelSelect;
-  if (!select) return null;
-  return select.options[select.selectedIndex] || null;
-}
-
 function getSelectedModel() {
-  return elements.modelSelect?.value || DEFAULT_MODEL;
-}
-
-// Fournisseur du modèle courant : sert uniquement à des messages d'interface
-// corrects ("OpenRouter est saturé" plutôt que "Groq est saturé").
-function getSelectedProviderLabel() {
-  const provider = getSelectedOption()?.dataset.provider || "groq";
-  return "Groq";
-}
-
-// Marque visuellement le mode sans filtre (bordure accentuée via CSS).
-function syncModelState() {
-  // Mode sélectionné : la seule option restante est Groq
-  const provider = elements.modelSelect?.dataset.provider || "groq";
-  if (elements.modelSelect) elements.modelSelect.dataset.provider = provider;
+  return elements.modelSelect?.value || "openai/gpt-oss-20b";
 }
 
 /* ------------------------------------------------------------------ */
@@ -761,7 +736,6 @@ async function sendMessage(input) {
   // Contexte = messages précédents uniquement (le serveur ajoute le message courant).
   const context = history.slice(0, -1).slice(-CONTEXT_WINDOW).map(({ role, content }) => ({ role, content }));
   const payload = { input, messages: context, model: getSelectedModel() };
-  const providerLabel = getSelectedProviderLabel();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -781,7 +755,7 @@ async function sendMessage(input) {
         if (!retriable) break;
 
         const waitMs = Math.min(Math.max(error.retryAfter * 1000, 1200 * attempt), 8000);
-        setTypingLabel(`${providerLabel} est saturé, nouvel essai dans ${Math.ceil(waitMs / 1000)} s`);
+        setTypingLabel(`Groq est saturé, nouvel essai dans ${Math.ceil(waitMs / 1000)} s`);
         await sleep(waitMs, controller.signal);
         setTypingLabel("Minerva réfléchit");
       }
@@ -810,7 +784,7 @@ async function sendMessage(input) {
       showToast("Impossible de joindre le serveur.", "Vérifie ta connexion puis réessaie.");
     } else if (error.status === 429) {
       showToast(
-        error.message || `Limite atteinte : ${providerLabel} reçoit trop de requêtes.`,
+        error.message || "Limite atteinte : Groq reçoit trop de requêtes.",
         error.action || "Patiente quelques secondes, la réponse arrive automatiquement au prochain essai."
       );
     } else {

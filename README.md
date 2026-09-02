@@ -16,7 +16,6 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 - Conversation **strictement chronologique** : le message le plus ancien en haut, la réponse la plus récente en bas.
 - Bulles alignées comme une messagerie classique : **Minerva à gauche** (avec avatar), **vous à droite**, même gabarit de bulle des deux côtés.
 - **Sélecteur de modèle IA simple dans la barre de saisie** : le client envoie seulement l'identifiant du modèle choisi ; le backend garde `openai/gpt-oss-20b` par défaut si aucun modèle valide n'est fourni.
-
 - Rendu **markdown** : gras, italique, listes, liens, tableaux, blocs de code.
 - Blocs de code avec **coloration syntaxique légère** et bouton **Copier**. Bouton *Copier* également sur chaque message.
 - Barre de saisie auto-extensible, envoi avec **Entrée**, saut de ligne avec **Maj+Entrée**.
@@ -40,7 +39,7 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 | Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq |
 | Modèle        | `openai/gpt-oss-20b` par défaut (configurable via `GROQ_MODEL`) ; le sélecteur client peut seulement remplacer ce nom de modèle dans la requête, avec `openai/gpt-oss-120b` en secours si le modèle choisi/principal renvoie 429/5xx |
 | Hébergement   | Vercel (fonction serverless) et Render (service Node) |
-| Secrets       | `process.env.GROQ_API_KEY` et `process.env.OPENROUTER_API_KEY`, jamais exposés au client |
+| Secrets       | `process.env.GROQ_API_KEY`, jamais exposé au client |
 
 > Le SDK OpenAI compatible Groq prend en charge `chat.completions.create`, qui est l'endpoint stable. `responses.create` existe aussi sur Groq, mais ce projet reste volontairement sur `chat.completions` pour une compatibilité maximale.
 
@@ -59,14 +58,11 @@ minerva/
 │       └── og-image.png    # image de prévisualisation pour le partage
 ├── src/                    # modules côté serveur (jamais exposés au client)
 │   ├── prompt.js           # identité + ton de Minerva (system prompt)
-│   ├── skills.js           # connaissances injectées au system prompt
-│   ├── models.js           # catalogue des modèles + routage Groq
+│   └── skills.js           # connaissances injectées au system prompt
 ├── api/
 │   └── chat.js             # fonction serverless (proxy Groq, retries, fallback de modèle)
-├── test/
 ├── server.js               # serveur local / Render (sert public/ + /api/chat)
 ├── .env.example            # modèle de variables d'environnement
-├── .env.local              # clés réelles en local (ignoré par git, prioritaire sur .env)
 ├── .gitignore              # .env jamais commité, node_modules, etc.
 ├── vercel.json
 └── README.md
@@ -126,11 +122,6 @@ L'application est disponible sur **<http://localhost:3000>**.
 | `GROQ_MAX_TOKENS`      | non         | `4096`                                                | Nombre max de tokens de sortie. |
 | `GROQ_DEADLINE_MS`     | non         | `26000`                                               | Budget total d'une requête côté serveur (doit rester < `maxDuration`). |
 | `PORT`                 | non         | `3000`                                                | Port du serveur (utilisé par Render). |
-# .env.local  (jamais commité)
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
-
 
 ---
 
@@ -164,7 +155,7 @@ Render lance l'application comme un **service web Node** : `server.js` sert le d
    - **Environment** : `Node`
    - **Build Command** : `npm install`
    - **Start Command** : `npm start`
-4. Dans **Environment** (Render), ajoute les variables :
+4. Dans **Environment** (Render), ajoute la variable :
    - `GROQ_API_KEY` = ta clé Groq
 5. Déclenche le déploiement.
 
@@ -174,7 +165,7 @@ Le serveur expose aussi `GET /api/health` pour vérifier que le service tourne.
 
 ## Sécurité
 
-- Les clés API (Groq) ne sont **jamais** incluses dans `public/`, ni dans les appels réseau du navigateur : le client n'envoie qu'un identifiant de modèle.
+- La clé API Groq n'est **jamais** incluse dans `public/`, ni dans les appels réseau du navigateur.
 - Le backend valide la méthode, la longueur du message et la fenêtre de mémoire.
 - Réponses d'erreur simplifiées : les détails sensibles ne sont pas renvoyés au client.
 - `.gitignore` exclut `.env` et tous les secrets. **Attention :** un fichier `.env` contenant une vraie clé a été commité par le passé. Il a été retiré du suivi git — mais la clé reste dans l'historique : **révoque-la et régénère-la** sur <https://console.groq.com/keys>.

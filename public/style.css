@@ -597,7 +597,7 @@ a:focus-visible {
 .model-select {
   flex: none;
   height: 44px;
-  max-width: 190px;
+  max-width: 170px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-2);
@@ -894,7 +894,7 @@ a:focus-visible {
 
   .model-select {
     height: 42px;
-    max-width: 124px;
+    max-width: 112px;
     padding: 0 6px;
     font-size: 0.76rem;
   }

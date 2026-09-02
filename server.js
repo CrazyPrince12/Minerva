@@ -2,13 +2,12 @@
 // Serveur léger pour le développement local et le déploiement Render.
 // Sert les fichiers statiques du dossier `public/` et route POST /api/chat vers api/chat.js.
 
-import "./src/env.js";
+import "dotenv/config";
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chatHandler from "./api/chat.js";
-import { CHAT_MODELS } from "./src/models.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -89,16 +88,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/api/health") {
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(
-      JSON.stringify({
-        ok: true,
-        model: process.env.GROQ_MODEL || "default",
-        providers: {
-          groq: { configured: Boolean((process.env.GROQ_API_KEY || "").trim()) },
-        },
-        models: CHAT_MODELS.map(({ id, provider, label }) => ({ id, provider, label })),
-      })
-    );
+    res.end(JSON.stringify({ ok: true, model: process.env.GROQ_MODEL || "default" }));
     return;
   }
 
