@@ -241,6 +241,10 @@ a:focus-visible {
 
 .msg-user {
   justify-content: flex-end;
+  /* L'avatar utilisateur est ajouté en premier dans le DOM (cf. buildMessage).
+     On inverse l'ordre visuel pour qu'il apparaisse à droite de la bulle,
+     comme dans la plupart des messageries. */
+  flex-direction: row-reverse;
 }
 
 .msg-avatar {
@@ -250,6 +254,18 @@ a:focus-visible {
   border-radius: 50%;
   box-shadow: 0 0 0 1px var(--border);
   margin-top: 22px; /* aligné sur la première ligne de la bulle */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.95rem;
+  overflow: hidden;
+}
+
+.msg-avatar-user {
+  /* Avatar utilisateur : cercle neutre, icône Font Awesome "user". */
+  color: var(--muted);
 }
 
 .msg-content {
@@ -258,6 +274,11 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* flex: 0 1 auto + min-width: 0 permettent au contentWrap de s'adapter
+     sans s'étirer, tout en laissant la bulle (inline-block) imposer sa
+     largeur intrinsèque. C'est le combo qui résout le bug de la bulle
+     "1 caractère de large" sur mobile. */
+  flex: 0 1 auto;
 }
 
 .msg-bot .msg-content {
@@ -285,17 +306,24 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* Aspect commun aux deux bulles (même forme, même padding, même rayon). */
+/* Aspect commun aux deux bulles (même forme, même padding, même rayon).
+   Le bot ET l'utilisateur partagent la même apparence ; seule la position
+   (gauche / droite) change. */
 .msg-bubble {
   max-width: 100%;
-  width: fit-content;
+  /* inline-block : la bulle se dimensionne à son contenu (pas 100% du
+     parent), ce qui évite le bug de "cycle flex" qui pouvait donner
+     une largeur de 1 caractère sur certains mobiles. */
+  display: inline-block;
   padding: 12px 15px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
   font-size: 0.98rem;
+  white-space: pre-wrap;
 }
 
 /* Petite pointe du côté de l'expéditeur, comme dans une messagerie classique. */
@@ -305,11 +333,17 @@ a:focus-visible {
 
 .msg-user .msg-bubble {
   border-bottom-right-radius: 6px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #ffffff;
-  border-color: transparent;
-  /* Conserve les retours à la ligne saisis par l'utilisateur. */
+  /* Même aspect que le bot : on n'utilise plus de fond coloré, juste la position
+     à droite pour différencier visuellement. */
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  /* Conserve les retours à la ligne saisis par l'utilisateur, sans casser
+     les mots au milieu (évite le wrapping lettre par lettre). */
   white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+  align-self: flex-end;
 }
 
 .msg-actions {
@@ -413,7 +447,9 @@ a:focus-visible {
 }
 
 .msg-user .msg-bubble a {
-  color: #ffffff;
+  /* Même couleur d'accent que le bot (les deux bulles ont maintenant le
+     même fond, donc on garde la même couleur de lien). */
+  color: var(--accent-strong);
 }
 
 .msg-bubble ul,
@@ -432,8 +468,10 @@ a:focus-visible {
 }
 
 .msg-user .msg-bubble blockquote {
-  border-left-color: rgba(255, 255, 255, 0.6);
-  color: rgba(255, 255, 255, 0.9);
+  /* Même rendu que pour le bot : la bulle utilisateur a maintenant le
+     même fond, donc on garde la même couleur de blockquote. */
+  border-left-color: var(--accent);
+  color: var(--muted);
 }
 
 .msg-bubble hr {
@@ -452,8 +490,10 @@ a:focus-visible {
 }
 
 .msg-user .inline-code {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.22);
+  /* Même fond que pour le bot : la bulle utilisateur a maintenant le
+     même fond, donc on garde le même style d'inline-code. */
+  background: var(--surface-2);
+  border-color: var(--border);
 }
 
 /* Code blocks */
@@ -468,7 +508,8 @@ a:focus-visible {
 
 .msg-user .code-block,
 .msg-user .msg-bubble pre {
-  border-color: rgba(255, 255, 255, 0.18);
+  /* Même style de bordure que pour le bot. */
+  border-color: var(--border);
 }
 
 .code-header {
@@ -513,7 +554,8 @@ a:focus-visible {
 }
 
 .msg-user .code-block code {
-  color: #f4f6fb;
+  /* Même couleur de code que pour le bot. */
+  color: #dfe4f0;
 }
 
 .tok-comment { color: #6f788e; font-style: italic; }
