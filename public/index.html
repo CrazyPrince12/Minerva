@@ -35,7 +35,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <link rel="stylesheet" href="/style.css?v=20260902-5" />
+  <link rel="stylesheet" href="/style.css?v=20260902-4" />
 
   <script>
     // Applique le thème avant le rendu pour éviter le flash.
@@ -77,12 +77,12 @@
 
   <footer class="composer-wrap">
     <form id="chat-form" class="composer" autocomplete="off">
-      <label for="model-select" class="sr-only">Modèle</label>
-      <select id="model-select" class="model-select" aria-label="Choisir un modèle">
-        <option value="openai/gpt-oss-20b" data-provider="groq">GPT-OSS 20B</option>
-        <option value="openai/gpt-oss-120b" data-provider="groq">GPT-OSS 120B</option>
-        <option value="groq/compound" data-provider="groq">Groq Compound</option>
-        <option value="groq/compound-mini" data-provider="groq">Compound Mini</option>
+      <label for="model-select" class="sr-only">Modèle IA</label>
+      <select id="model-select" class="model-select" name="model" aria-label="Choisir le modèle IA">
+        <option value="openai/gpt-oss-20b" selected>GPT-OSS 20B</option>
+        <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+        <option value="groq/compound">Groq Compound</option>
+        <option value="groq/compound-mini">Compound Mini</option>
       </select>
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
@@ -97,9 +97,10 @@
         <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
       </button>
     </form>
-    </p>
     <p class="composer-note"><span aria-hidden="true">Entrée</span> pour envoyer · <span aria-hidden="true">Maj + Entrée</span> pour un retour à la ligne</p>
   </footer>
+
+  <div id="error-toast" class="error-toast" role="alert" hidden></div>
 
   <div id="thinking" class="thinking sr-only" role="status" aria-live="assertive">
     <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
@@ -107,6 +108,6 @@
   </div>
 
   <!-- La version évite de réutiliser le JS incompatible mis en cache avant ce correctif. -->
-  <script src="/script.js?v=20260902-5" type="module"></script>
+  <script src="/script.js?v=20260902-4" type="module"></script>
 </body>
 </html>
