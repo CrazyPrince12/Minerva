@@ -21,8 +21,7 @@ const elements = {
   sendBtn: document.getElementById("send-btn"),
   clearBtn: document.getElementById("clear-chat"),
   themeToggle: document.getElementById("theme-toggle"),
-  themeIconDark: document.getElementById("theme-icon-dark"),
-  themeIconLight: document.getElementById("theme-icon-light"),
+  themeIcon: document.getElementById("theme-icon"),
   errorToast: document.getElementById("error-toast"),
   thinking: document.getElementById("thinking"),
   thinkingText: document.getElementById("thinking-text"),
@@ -75,9 +74,11 @@ function createId() {
 
 function updateThemeIcons() {
   const dark = document.documentElement.dataset.theme === "dark";
-  // En thème sombre on affiche la lune (icône = thème actuel).
-  elements.themeIconDark.hidden = !dark;
-  elements.themeIconLight.hidden = dark;
+  // Une seule icône "cercle demi-ouvert" : elle fonctionne pour les deux
+  // thèmes et reste cohérente avec Font Awesome (pas d'emoji).
+  elements.themeIcon.classList.toggle("fa-moon", !dark);
+  elements.themeIcon.classList.toggle("fa-sun", dark);
+  elements.themeIcon.classList.remove("fa-circle-half-stroke");
   elements.themeToggle.setAttribute("aria-label", dark ? "Passer au thème clair" : "Passer au thème sombre");
   elements.themeToggle.setAttribute("title", dark ? "Passer au thème clair" : "Passer au thème sombre");
 }
@@ -433,36 +434,42 @@ function renderMarkdown(container, text) {
 /* ------------------------------------------------------------------ */
 
 function buildMessage(role, content, options = {}) {
+  const isBot = role === "assistant";
   const msg = document.createElement("div");
-  msg.className = `msg msg-${role === "assistant" ? "bot" : "user"}`;
+  msg.className = `msg msg-${isBot ? "bot" : "user"}`;
   msg.dataset.messageId = options.id || createId();
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "msg-content";
 
-  const meta = document.createElement("div");
-  meta.className = "msg-meta";
+  // La ligne d'identité (nom + heure) n'apparaît que pour le bot. Pour
+  // l'utilisateur, l'avatar suffit — pas de bulle "Moi"/"Vous" parasite.
+  if (isBot) {
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
 
-  const roleSpan = document.createElement("span");
-  roleSpan.className = "msg-role";
-  roleSpan.textContent = role === "user" ? "Vous" : "Minerva";
+    const roleSpan = document.createElement("span");
+    roleSpan.className = "msg-role";
+    roleSpan.textContent = "Minerva";
 
-  const time = document.createElement("span");
-  time.className = "msg-time";
-  time.textContent = formatTime(options.ts);
+    const time = document.createElement("span");
+    time.className = "msg-time";
+    time.textContent = formatTime(options.ts);
 
-  meta.append(roleSpan, time);
+    meta.append(roleSpan, time);
+    contentWrap.append(meta);
+  }
 
   const bubble = document.createElement("div");
   bubble.className = "msg-bubble";
 
-  if (role === "user") {
+  if (!isBot) {
     bubble.textContent = content;
   } else {
     renderMarkdown(bubble, content);
   }
 
-  contentWrap.append(meta, bubble);
+  contentWrap.append(bubble);
 
   const actions = document.createElement("div");
   actions.className = "msg-actions";
@@ -477,13 +484,23 @@ function buildMessage(role, content, options = {}) {
 
   contentWrap.append(actions);
 
-  if (role === "assistant") {
+  // Avatar : logo pour le bot, icône Font Awesome "utilisateur" pour l'humain.
+  // Même taille, même cercle, même halo : cohérence visuelle.
+  if (isBot) {
     const avatar = document.createElement("img");
     avatar.className = "msg-avatar";
     avatar.src = "/assets/logo.svg";
     avatar.alt = "";
     avatar.width = 34;
     avatar.height = 34;
+    msg.append(avatar);
+  } else {
+    const avatar = document.createElement("span");
+    avatar.className = "msg-avatar msg-avatar-user";
+    avatar.setAttribute("aria-hidden", "true");
+    const userIcon = document.createElement("i");
+    userIcon.className = "fa-solid fa-user";
+    avatar.append(userIcon);
     msg.append(avatar);
   }
 
@@ -791,7 +808,15 @@ function init() {
   restoreHistory();
   syncEmptyState();
   autoResize();
-  requestAnimationFrame(() => scrollToBottom(true));
+  // Au chargement, on force le scroll tout en bas pour que les messages les
+  // plus récents soient visibles (ordre chronologique : ancien en haut,
+  // récent en bas). Double rAF pour laisser la mise en page se stabiliser.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const chat = elements.messages.parentElement;
+      if (chat) chat.scrollTop = chat.scrollHeight;
+    });
+  });
 }
 
 init();
