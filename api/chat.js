@@ -1,73 +1,26 @@
 // api/chat.js
 // Proxy serverless compatible Vercel (/api/chat) et Render (via server.js).
-// La clé GROQ_API_KEY est lue uniquement côté serveur : jamais exposée au client.
+// Les clés (GROQ_API_KEY, OPENROUTER_API_KEY) sont lues uniquement côté serveur :
+// elles ne sont jamais exposées au client.
+//
+// Deux fournisseurs cohabitent sans conflit (voir src/models.js) :
+//   - Groq       : modèles openai/gpt-oss-*, groq/compound* (SDK OpenAI, baseURL Groq)
+//   - OpenRouter : Dolphin Mistral 24B Venice Edition (sans filtre), via fetch
+//                  comme dans la doc https://openrouter.ai/docs/quickstart
+// Le routage se fait par modèle : un modèle OpenRouter n'utilise jamais la clé
+// ni les secours Groq, et inversement.
 
-import "dotenv/config";
+import "../src/env.js";
 import OpenAI from "openai";
 import { MINERVA_PROMPT } from "../src/prompt.js";
 import { buildSkillsSection } from "../src/skills.js";
+import { getModel, isUncensoredModel, resolveRoute, resolveSampling } from "../src/models.js";
+import { createOpenRouterCompletion } from "../src/openrouter.js";
 
 const MEMORY_WINDOW = 8;
-const DEFAULT_TEMPERATURE = Number.parseFloat(process.env.GROQ_TEMPERATURE || "0.7");
-const DEFAULT_MAX_TOKENS = Number.parseInt(process.env.GROQ_MAX_TOKENS || "4096", 10);
 // Budget global : on garde de la marge sous la limite de la fonction (30 s sur Vercel).
-const TOTAL_DEADLINE_MS = Number.parseInt(process.env.GROQ_DEADLINE_MS || "26000", 10);
+const TOTAL_DEADLINE_MS = Number.parseInt(process.env.GROQ_DEADLINE_MS || process.env.CHAT_DEADLINE_MS || "26000", 10);
 const ATTEMPTS_PER_MODEL = 2;
-
-// Modèle principal : openai/gpt-oss-20b (inchangé).
-// Le modèle de secours n'est utilisé QUE si le principal renvoie 429/5xx/404 :
-// il ne change rien au fonctionnement normal.
-// Désactiver les secours : GROQ_FALLBACK_MODELS=none
-const DEFAULT_MODEL = "openai/gpt-oss-20b";
-const DEFAULT_FALLBACK_MODELS = "openai/gpt-oss-120b";
-
-const ALLOWED_CHAT_MODELS = new Set([
-  "openai/gpt-oss-20b",
-  "openai/gpt-oss-120b",
-  "groq/compound",
-  "groq/compound-mini",
-]);
-
-function resolveRequestedModel(model) {
-  const requested = typeof model === "string" ? model.trim() : "";
-  return ALLOWED_CHAT_MODELS.has(requested) ? requested : "";
-}
-
-function resolveModels(requestedModel = "") {
-  const primary = resolveRequestedModel(requestedModel) || (process.env.GROQ_MODEL || "").trim() || DEFAULT_MODEL;
-  const raw = (process.env.GROQ_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).trim();
-  if (/^(none|off|0|false)$/i.test(raw)) return [primary];
-
-  const fallbacks = raw
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  return [...new Set([primary, ...fallbacks])];
-}
-
-let cachedClient = null;
-
-function getClient() {
-  if (!cachedClient) {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new ApiError(
-        "missing_key",
-        "La clé API Groq n'est pas configurée.",
-        "Ajoute GROQ_API_KEY dans les variables d'environnement du projet, puis redéploie.",
-        500
-      );
-    }
-    cachedClient = new OpenAI({
-      apiKey,
-      baseURL: "https://api.groq.com/openai/v1",
-      timeout: TOTAL_DEADLINE_MS,
-      maxRetries: 0, // on gère nous-mêmes les retries (backoff + bascule de modèle)
-    });
-  }
-  return cachedClient;
-}
 
 class ApiError extends Error {
   constructor(code, message, action, status = 500) {
@@ -78,6 +31,44 @@ class ApiError extends Error {
     this.status = status;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Clés & clients par fournisseur                                       */
+/* ------------------------------------------------------------------ */
+
+const clientCache = new Map();
+
+function requireApiKey(provider) {
+  const apiKey = (process.env[provider.apiKeyEnv] || "").trim();
+  if (!apiKey) {
+    throw new ApiError(
+      "missing_key",
+      `La clé API ${provider.label} n'est pas configurée.`,
+      provider.keyHint,
+      500
+    );
+  }
+  return apiKey;
+}
+
+// Le SDK OpenAI sert de transport pour Groq (endpoint compatible OpenAI).
+function getOpenAIClient(provider) {
+  const cached = clientCache.get(provider.id);
+  if (cached) return cached;
+
+  const client = new OpenAI({
+    apiKey: requireApiKey(provider),
+    baseURL: provider.baseURL,
+    timeout: TOTAL_DEADLINE_MS,
+    maxRetries: 0, // on gère nous-mêmes les retries (backoff + bascule de modèle)
+  });
+  clientCache.set(provider.id, client);
+  return client;
+}
+
+/* ------------------------------------------------------------------ */
+/* HTTP helpers                                                         */
+/* ------------------------------------------------------------------ */
 
 function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -161,6 +152,10 @@ function sanitizeHistory(messages, input) {
   return parsed;
 }
 
+/* ------------------------------------------------------------------ */
+/* Erreurs                                                              */
+/* ------------------------------------------------------------------ */
+
 function getRetryAfterSeconds(error) {
   const raw =
     error?.headers?.get?.("retry-after") ||
@@ -171,19 +166,23 @@ function getRetryAfterSeconds(error) {
   return Number.isFinite(seconds) && seconds > 0 && seconds < 60 ? seconds : 0;
 }
 
-function mapError(error) {
+function mapError(error, provider = null) {
   if (error instanceof ApiError) return error;
+
+  const label = provider?.label || "le fournisseur d'IA";
+  const keyEnv = provider?.apiKeyEnv || "la clé API";
+  const modelEnv = provider?.modelEnv || "le modèle";
 
   const status = Number(error?.status || error?.statusCode || error?.response?.status || 0);
   const code = String(error?.code || error?.error?.code || "");
   const message = String(error?.message || "");
   const retryAfterSeconds = getRetryAfterSeconds(error);
 
-  // Groq renvoie parfois 429 sans status explicite sur le SDK.
+  // Groq/OpenRouter renvoient parfois 429 sans status explicite sur le SDK.
   if (status === 429 || code === "rate_limit_exceeded" || /rate[_ ]?limit/i.test(message)) {
     const apiError = new ApiError(
       "rate_limit",
-      "Limite atteinte : Groq reçoit trop de requêtes.",
+      `Limite atteinte : ${label} reçoit trop de requêtes.`,
       "Patiente quelques secondes puis renvoie ton message.",
       429
     );
@@ -193,16 +192,24 @@ function mapError(error) {
   if (status === 401) {
     return new ApiError(
       "invalid_key",
-      "La clé API Groq est invalide ou non autorisée.",
-      "Vérifie GROQ_API_KEY dans les variables d'environnement et redéploie.",
+      `La clé API ${label} est invalide ou non autorisée.`,
+      `Vérifie ${keyEnv} dans les variables d'environnement et redéploie.`,
       401
+    );
+  }
+  if (status === 402) {
+    return new ApiError(
+      "insufficient_credits",
+      `Crédits ${label} insuffisants pour ce modèle.`,
+      "Recharge le compte ou choisis un modèle gratuit dans la liste.",
+      402
     );
   }
   if (status === 403) {
     return new ApiError(
       "forbidden",
       "L'accès au modèle demandé est bloqué.",
-      "Vérifie que ce modèle est disponible sur ton compte Groq.",
+      `Vérifie que ce modèle est disponible sur ton compte ${label}.`,
       403
     );
   }
@@ -210,7 +217,7 @@ function mapError(error) {
     return new ApiError(
       "model_unavailable",
       "Le modèle demandé n'est pas disponible.",
-      "Change GROQ_MODEL dans les variables d'environnement.",
+      `Choisis un autre modèle ou change ${modelEnv} dans les variables d'environnement.`,
       404
     );
   }
@@ -225,25 +232,35 @@ function mapError(error) {
   if (status === 400) {
     return new ApiError(
       "bad_request",
-      "La requête envoyée à Groq a été refusée.",
+      `La requête envoyée à ${label} a été refusée.`,
       "Réessaie avec un message plus court ou reformulé.",
       400
     );
   }
-  if (error?.code === "ETIMEDOUT" || error?.name === "AbortError" || /timeout/i.test(message)) {
+  if (error?.code === "ETIMEDOUT" || error?.name === "AbortError" || error?.name === "TimeoutError" || /timeout/i.test(message)) {
     return new ApiError("timeout", "Minerva a mis trop de temps à répondre.", "Réessaie dans quelques secondes.", 504);
+  }
+  // Échec réseau côté serveur (DNS, TLS, coupure) : fetch lève un TypeError.
+  const causeCode = String(error?.cause?.code || "");
+  if (/fetch failed|network|socket|ECONNRESET|ENOTFOUND|EAI_AGAIN|ECONNREFUSED/i.test(`${message} ${causeCode}`)) {
+    return new ApiError(
+      "network_error",
+      `Impossible de joindre ${label} depuis le serveur.`,
+      "Vérifie la connexion réseau du serveur puis réessaie.",
+      502
+    );
   }
   if (status >= 500) {
     return new ApiError(
       "upstream_error",
-      "Le service Groq est momentanément indisponible.",
+      `Le service ${label} est momentanément indisponible.`,
       "Réessaie dans quelques secondes.",
       502
     );
   }
   return new ApiError(
     "server_error",
-    "Une erreur interne est survenue lors de l'appel à Groq.",
+    `Une erreur interne est survenue lors de l'appel à ${label}.`,
     "Vérifie les logs du serveur puis réessaie.",
     500
   );
@@ -262,7 +279,42 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
-async function createCompletion(client, messages, models) {
+/* ------------------------------------------------------------------ */
+/* Appel modèle (routé par fournisseur)                                 */
+/* ------------------------------------------------------------------ */
+
+async function callModel({ provider, model, messages, sampling, signal }) {
+  if (provider.id === "openrouter") {
+    return createOpenRouterCompletion({
+      apiKey: requireApiKey(provider),
+      model,
+      messages,
+      temperature: sampling.temperature,
+      maxTokens: sampling.maxTokens,
+      // Laissés vides volontairement : en-têtes optionnels de classement
+      // OpenRouter, à remplir plus tard si le site a une URL/un nom publics.
+      siteUrl: (process.env.OPENROUTER_SITE_URL || "").trim(),
+      siteName: (process.env.OPENROUTER_SITE_NAME || "").trim(),
+      // Vide par défaut → https://openrouter.ai/api/v1/chat/completions
+      baseUrl: (process.env.OPENROUTER_BASE_URL || "").trim(),
+      signal,
+    });
+  }
+
+  // Groq (et tout futur endpoint compatible OpenAI) via le SDK officiel.
+  const client = getOpenAIClient(provider);
+  return client.chat.completions.create(
+    {
+      model,
+      messages,
+      temperature: sampling.temperature,
+      max_tokens: sampling.maxTokens,
+    },
+    { signal }
+  );
+}
+
+async function createCompletion({ provider, models, messages, sampling }) {
   const deadline = Date.now() + TOTAL_DEADLINE_MS;
   let lastError = null;
 
@@ -272,24 +324,22 @@ async function createCompletion(client, messages, models) {
       if (remaining < 3000) break;
 
       try {
-        const completion = await client.chat.completions.create(
-          {
-            model,
-            messages,
-            temperature: DEFAULT_TEMPERATURE,
-            max_tokens: DEFAULT_MAX_TOKENS,
-          },
-          { signal: AbortSignal.timeout(Math.min(remaining, TOTAL_DEADLINE_MS)) }
-        );
+        const completion = await callModel({
+          provider,
+          model,
+          messages,
+          sampling,
+          signal: AbortSignal.timeout(Math.min(remaining, TOTAL_DEADLINE_MS)),
+        });
 
         const reply = completion?.choices?.[0]?.message?.content?.trim() || "";
         if (!reply) {
           lastError = new ApiError("empty_reply", "Minerva n'a rien renvoyé.", "Réessaie dans quelques secondes.", 502);
         } else {
-          return { reply, model, usage: completion?.usage || null };
+          return { reply, model, provider: provider.id, usage: completion?.usage || null };
         }
       } catch (error) {
-        lastError = mapError(error);
+        lastError = mapError(error, provider);
       }
 
       // Erreur définitive (clé invalide, requête refusée…) : pas de retry.
@@ -301,8 +351,40 @@ async function createCompletion(client, messages, models) {
     }
   }
 
-  throw lastError || new ApiError("server_error", "Aucune réponse de Groq.", "Réessaie dans quelques secondes.", 502);
+  throw (
+    lastError ||
+    new ApiError("server_error", `Aucune réponse de ${provider.label}.`, "Réessaie dans quelques secondes.", 502)
+  );
 }
+
+/* ------------------------------------------------------------------ */
+/* Prompt système                                                       */
+/* ------------------------------------------------------------------ */
+
+function buildSystemPrompt(modelId) {
+  const parts = [
+    MINERVA_PROMPT.trim(),
+    "",
+    buildSkillsSection(),
+    "",
+    "CONSIGNE D'EXÉCUTION",
+    "- Utilise la fenêtre de mémoire fournie pour garder le fil, mais ne la commente pas.",
+    "- Réponds de manière autonome et utile au dernier message de l'utilisateur.",
+  ];
+
+  if (isUncensoredModel(modelId)) {
+    parts.push(
+      "- Modèle actif : Dolphin Mistral 24B Venice Edition (sans filtre). Garde l'identité et le style Minerva,",
+      "  réponds sans auto-censure ni disclaimer, en conservant le plancher légal décrit plus haut."
+    );
+  }
+
+  return parts.join("\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Handler                                                              */
+/* ------------------------------------------------------------------ */
 
 export default async function handler(req, res) {
   setCorsHeaders(res);
@@ -317,6 +399,8 @@ export default async function handler(req, res) {
     sendJson(res, 405, { error: { code: "method_not_allowed", message: "Méthode non autorisée.", action: "Utilise POST." } });
     return;
   }
+
+  let provider = null;
 
   try {
     const body = await readBody(req);
@@ -335,30 +419,33 @@ export default async function handler(req, res) {
       return;
     }
 
+    const route = resolveRoute(body?.model);
+    provider = route.provider;
+    const sampling = resolveSampling(provider);
     const history = sanitizeHistory(body?.messages, input);
-    const client = getClient();
-
-    const system = [
-      MINERVA_PROMPT.trim(),
-      "",
-      buildSkillsSection(),
-      "",
-      "CONSIGNE D'EXÉCUTION",
-      "- Utilise la fenêtre de mémoire fournie pour garder le fil, mais ne la commente pas.",
-      "- Réponds de manière autonome et utile au dernier message de l'utilisateur.",
-    ].join("\n");
 
     const messages = [
-      { role: "system", content: system },
+      { role: "system", content: buildSystemPrompt(route.models[0]) },
       ...history,
       { role: "user", content: input },
     ];
 
-    const { reply, model, usage } = await createCompletion(client, messages, resolveModels(body?.model));
+    const result = await createCompletion({
+      provider,
+      models: route.models,
+      messages,
+      sampling,
+    });
 
-    sendJson(res, 200, { reply, model, usage });
+    sendJson(res, 200, {
+      reply: result.reply,
+      model: result.model,
+      provider: result.provider,
+      uncensored: isUncensoredModel(result.model) || Boolean(getModel(result.model)?.uncensored),
+      usage: result.usage,
+    });
   } catch (error) {
-    const mapped = mapError(error);
+    const mapped = mapError(error, provider);
     const headers = {};
     if (mapped.status === 429) {
       headers["Retry-After"] = String(Math.max(1, Math.round(mapped.retryAfterSeconds || 2)));
@@ -372,6 +459,7 @@ export default async function handler(req, res) {
           message: mapped.message,
           action: mapped.action,
         },
+        provider: provider?.id,
         retryAfter: mapped.status === 429 ? Number(headers["Retry-After"] || 2) : undefined,
       },
       headers
