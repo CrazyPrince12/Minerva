@@ -35,7 +35,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <link rel="stylesheet" href="/style.css?v=20260902-4" />
+  <link rel="stylesheet" href="/style.css?v=20260902-5" />
 
   <script>
     // Applique le thème avant le rendu pour éviter le flash.
@@ -79,10 +79,20 @@
     <form id="chat-form" class="composer" autocomplete="off">
       <label for="model-select" class="sr-only">Modèle IA</label>
       <select id="model-select" class="model-select" name="model" aria-label="Choisir le modèle IA">
-        <option value="openai/gpt-oss-20b" selected>GPT-OSS 20B</option>
-        <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
-        <option value="groq/compound">Groq Compound</option>
-        <option value="groq/compound-mini">Compound Mini</option>
+        <optgroup label="Groq">
+          <option value="openai/gpt-oss-20b" data-provider="groq" selected>GPT-OSS 20B</option>
+          <option value="openai/gpt-oss-120b" data-provider="groq">GPT-OSS 120B</option>
+          <option value="groq/compound" data-provider="groq">Groq Compound</option>
+          <option value="groq/compound-mini" data-provider="groq">Compound Mini</option>
+        </optgroup>
+        <optgroup label="OpenRouter">
+          <option
+            value="cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+            data-provider="openrouter"
+            data-uncensored="true"
+            title="Dolphin Mistral 24B Venice Edition — modèle sans filtre (OpenRouter)"
+          >Dolphin 24B · Uncensored</option>
+        </optgroup>
       </select>
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
@@ -97,6 +107,10 @@
         <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
       </button>
     </form>
+    <p id="uncensored-note" class="composer-note uncensored-note" hidden>
+      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+      Mode sans filtre actif — Dolphin Mistral 24B via OpenRouter
+    </p>
     <p class="composer-note"><span aria-hidden="true">Entrée</span> pour envoyer · <span aria-hidden="true">Maj + Entrée</span> pour un retour à la ligne</p>
   </footer>
 
@@ -108,6 +122,6 @@
   </div>
 
   <!-- La version évite de réutiliser le JS incompatible mis en cache avant ce correctif. -->
-  <script src="/script.js?v=20260902-4" type="module"></script>
+  <script src="/script.js?v=20260902-5" type="module"></script>
 </body>
 </html>
