@@ -69,8 +69,9 @@ assert.equal(resolveEndpoint(""), "https://openrouter.ai/api/v1/chat/completions
 assert.equal(resolveEndpoint("https://openrouter.ai/api/v1"), "https://openrouter.ai/api/v1/chat/completions");
 
 // 2. Routage : chaque modèle part chez le bon fournisseur, sans mélange.
+// Le fallback par défaut pour OpenRouter est Hermes 3 (uncensored).
 assert.equal(resolveRoute(UNCENSORED).provider.id, "openrouter");
-assert.deepEqual(resolveRoute(UNCENSORED).models, [UNCENSORED]); // aucun secours Groq
+assert.deepEqual(resolveRoute(UNCENSORED).models, [UNCENSORED, "nousresearch/hermes-3-llama-3.1-405b:free"]);
 assert.equal(resolveRoute("openai/gpt-oss-20b").provider.id, "groq");
 assert.equal(resolveRoute("groq/compound").provider.id, "groq");
 assert.equal(resolveRoute("").provider.id, "groq"); // comportement historique inchangé
