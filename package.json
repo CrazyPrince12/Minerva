@@ -1,0 +1,18 @@
+{
+  "name": "minerva",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minerva — chatbot IA minimaliste développé par Crazy Prince Dev",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.0.0"
+  }
+}
