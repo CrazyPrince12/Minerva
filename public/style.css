@@ -240,11 +240,9 @@ a:focus-visible {
 }
 
 .msg-user {
+  /* Ordre DOM : bulle puis avatar. Avec un axe non inversé, flex-end place
+     l'ensemble contre le bord droit sur mobile comme sur ordinateur. */
   justify-content: flex-end;
-  /* L'avatar utilisateur est ajouté en premier dans le DOM (cf. buildMessage).
-     On inverse l'ordre visuel pour qu'il apparaisse à droite de la bulle,
-     comme dans la plupart des messageries. */
-  flex-direction: row-reverse;
 }
 
 .msg-avatar {

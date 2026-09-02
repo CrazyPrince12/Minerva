@@ -516,26 +516,27 @@ function buildMessage(role, content, options = {}) {
   contentWrap.append(actions);
 
   // Avatar : logo pour le bot, icône Font Awesome "utilisateur" pour l'humain.
-  // Même taille, même cercle, même halo : cohérence visuelle.
+  // Le DOM suit directement l'ordre visuel afin que flex-end aligne le groupe
+  // utilisateur à droite sans inverser l'axe Flexbox.
+  let avatar;
   if (isBot) {
-    const avatar = document.createElement("img");
+    avatar = document.createElement("img");
     avatar.className = "msg-avatar";
     avatar.src = "/assets/logo.svg";
     avatar.alt = "";
     avatar.width = 34;
     avatar.height = 34;
-    msg.append(avatar);
   } else {
-    const avatar = document.createElement("span");
+    avatar = document.createElement("span");
     avatar.className = "msg-avatar msg-avatar-user";
     avatar.setAttribute("aria-hidden", "true");
     const userIcon = document.createElement("i");
     userIcon.className = "fa-solid fa-user";
     avatar.append(userIcon);
-    msg.append(avatar);
   }
 
-  msg.append(contentWrap);
+  if (isBot) msg.append(avatar, contentWrap);
+  else msg.append(contentWrap, avatar);
   return msg;
 }
 
