@@ -46,8 +46,12 @@ function sendFile(res, filePath) {
     .then((data) => {
       res.statusCode = 200;
       res.setHeader("Content-Type", type);
-      // index.html ne doit jamais être mis en cache (déploiements fréquents).
-      res.setHeader("Cache-Control", filePath === INDEX_FILE ? "no-store" : "public, max-age=31536000, immutable");
+      // Les fichiers publics gardent des noms stables (script.js, style.css,
+      // logo.svg). Ils ne doivent donc jamais être marqués `immutable`, sinon
+      // un déploiement peut mélanger un ancien JS avec le nouvel HTML et faire
+      // planter toute l'interface. Le navigateur peut les conserver, mais doit
+      // les revalider à chaque chargement.
+      res.setHeader("Cache-Control", filePath === INDEX_FILE ? "no-store" : "public, max-age=0, must-revalidate");
       res.end(data);
     })
     .catch(() => {
