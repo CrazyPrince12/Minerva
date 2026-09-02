@@ -14,7 +14,7 @@
   <meta property="og:title" content="Minerva — Assistant IA minimaliste" />
   <meta property="og:description" content="Discute avec Minerva : dev web, code, tech, recherche et plus. Développé par Crazy Prince Dev." />
   <meta property="og:url" content="https://minerva-chat.vercel.app/" />
-  <!-- ⚠️ Remplace cette URL par ton domaine réel après déploiement (voir README). -->
+  <!-- Remplace cette URL par ton domaine réel après déploiement (voir README). -->
   <meta property="og:image" content="https://minerva-chat.vercel.app/assets/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -26,6 +26,15 @@
   <meta name="twitter:image" content="https://minerva-chat.vercel.app/assets/og-image.png" />
 
   <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+
+  <!-- Icônes : Font Awesome 6 (aucun emoji dans l'interface). -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    referrerpolicy="no-referrer"
+  />
+
   <link rel="stylesheet" href="/style.css" />
 
   <script>
@@ -48,27 +57,16 @@
 
     <div class="header-actions">
       <button id="clear-chat" class="icon-button" type="button" aria-label="Effacer la conversation" title="Effacer la conversation">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 6h18" />
-          <path d="M8 6V4h8v2" />
-          <path d="M19 6l-1 14H6L5 6" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-        </svg>
+        <i class="fa-regular fa-trash-can" aria-hidden="true"></i>
       </button>
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Changer de thème" title="Changer de thème">
-        <svg id="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-        </svg>
-        <svg id="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
+        <i id="theme-icon-dark" class="fa-solid fa-moon" aria-hidden="true"></i>
+        <i id="theme-icon-light" class="fa-solid fa-sun" aria-hidden="true" hidden></i>
       </button>
     </div>
   </header>
 
-  <main id="chat" class="chat" aria-live="polite">
+  <main id="chat" class="chat">
     <div id="empty-state" class="empty-state">
       <img class="empty-logo" src="/assets/logo.svg" width="72" height="72" alt="" />
       <h1 id="greeting" class="greeting"></h1>
@@ -76,8 +74,6 @@
     </div>
 
     <div id="messages" class="messages" aria-label="Conversation" role="log" aria-live="polite"></div>
-
-    <div id="error-toast" class="error-toast" role="alert" hidden></div>
   </main>
 
   <footer class="composer-wrap">
@@ -91,17 +87,19 @@
         aria-label="Écris à Minerva"
         enterkeyhint="send"
       ></textarea>
-      <button id="send-btn" class="send-button" type="submit" aria-label="Envoyer le message">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M22 2 11 13" />
-          <path d="M22 2 15 22l-4-9-9-4z" />
-        </svg>
+      <button id="send-btn" class="send-button" type="submit" aria-label="Envoyer le message" title="Envoyer le message">
+        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
       </button>
     </form>
     <p class="composer-note"><span aria-hidden="true">Entrée</span> pour envoyer · <span aria-hidden="true">Maj + Entrée</span> pour un retour à la ligne</p>
   </footer>
 
-  <div id="thinking" class="thinking sr-only" role="status" aria-live="assertive">Minerva réfléchit…</div>
+  <div id="error-toast" class="error-toast" role="alert" hidden></div>
+
+  <div id="thinking" class="thinking sr-only" role="status" aria-live="assertive">
+    <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+    <span id="thinking-text">Minerva réfléchit…</span>
+  </div>
 
   <script src="/script.js" type="module"></script>
 </body>

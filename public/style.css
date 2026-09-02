@@ -1,6 +1,7 @@
 /* ---------------------------------------------------------------------------
    Minerva — styles
    CSS3 Grid + Flexbox. Thème sombre par défaut, thème clair via data-theme.
+   Icônes : Font Awesome 6 (aucun emoji).
 --------------------------------------------------------------------------- */
 
 :root {
@@ -21,6 +22,7 @@
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   --radius: 18px;
   --radius-sm: 12px;
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {
@@ -36,6 +38,7 @@
   --ok: #12855a;
   --err: #c62f38;
   --shadow: 0 18px 50px rgba(30, 35, 60, 0.12);
+  color-scheme: light;
 }
 
 * {
@@ -139,6 +142,7 @@ a:focus-visible {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted);
+  font-size: 1rem;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
@@ -150,6 +154,15 @@ a:focus-visible {
 
 .icon-button:active {
   transform: translateY(0);
+}
+
+/* Icône de thème : rotation douce quand on bascule. */
+#theme-toggle i {
+  transition: transform 0.25s ease;
+}
+
+#theme-toggle:hover i {
+  transform: rotate(-15deg);
 }
 
 /* ------------------------------- Chat ------------------------------------- */
@@ -203,6 +216,8 @@ a:focus-visible {
 
 /* ------------------------------ Messages ---------------------------------- */
 
+/* Ordre chronologique strict : le premier message rendu est le plus ancien
+   (les noeuds sont ajoutés dans le DOM avec append, jamais prepend). */
 .messages {
   display: flex;
   flex-direction: column;
@@ -210,38 +225,43 @@ a:focus-visible {
   padding: 22px 18px 28px;
   width: min(920px, 100%);
   margin: 0 auto;
+  margin-top: auto; /* pousse la conversation vers le bas tant qu'elle est courte */
 }
 
 .msg {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
   gap: 10px;
-  align-items: start;
+  width: 100%;
+}
+
+.msg-bot {
+  justify-content: flex-start;
 }
 
 .msg-user {
-  grid-template-columns: minmax(0, 1fr) 34px;
+  justify-content: flex-end;
 }
 
 .msg-avatar {
+  flex: none;
   width: 34px;
   height: 34px;
   border-radius: 50%;
   box-shadow: 0 0 0 1px var(--border);
-  margin-top: 4px;
-}
-
-.msg-user .msg-avatar {
-  grid-column: 2;
-  grid-row: 1;
-  display: none;
+  margin-top: 22px; /* aligné sur la première ligne de la bulle */
 }
 
 .msg-content {
   min-width: 0;
+  max-width: min(88%, 720px);
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.msg-bot .msg-content {
+  align-items: flex-start;
 }
 
 .msg-user .msg-content {
@@ -254,10 +274,7 @@ a:focus-visible {
   gap: 8px;
   font-size: 0.78rem;
   color: var(--muted);
-}
-
-.msg-user .msg-meta {
-  justify-content: flex-end;
+  padding: 0 4px;
 }
 
 .msg-role {
@@ -268,8 +285,10 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Aspect commun aux deux bulles (même forme, même padding, même rayon). */
 .msg-bubble {
   max-width: 100%;
+  width: fit-content;
   padding: 12px 15px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -279,23 +298,18 @@ a:focus-visible {
   font-size: 0.98rem;
 }
 
+/* Petite pointe du côté de l'expéditeur, comme dans une messagerie classique. */
 .msg-bot .msg-bubble {
-  max-width: min(92%, 720px);
+  border-bottom-left-radius: 6px;
 }
 
 .msg-user .msg-bubble {
-  max-width: min(86%, 720px);
-}
-
-.msg-user .msg-bubble {
+  border-bottom-right-radius: 6px;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #ffffff;
   border-color: transparent;
-  border-bottom-right-radius: 6px;
-}
-
-.msg-bot .msg-bubble {
-  border-bottom-left-radius: 6px;
+  /* Conserve les retours à la ligne saisis par l'utilisateur. */
+  white-space: pre-wrap;
 }
 
 .msg-actions {
@@ -307,26 +321,33 @@ a:focus-visible {
   display: none;
 }
 
-.copy-msg {
+.copy-msg,
+.copy-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   border-radius: 10px;
   padding: 4px 8px;
   font-size: 0.76rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   opacity: 0.75;
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-.copy-msg:hover {
+.copy-msg:hover,
+.copy-code:hover {
   opacity: 1;
   background: var(--surface-2);
 }
 
-/* Typing indicator */
+.copy-msg i,
+.copy-code i {
+  font-size: 0.8rem;
+}
+
+/* Indicateur « Minerva réfléchit » : même gabarit qu'un message du bot. */
 .msg-typing .msg-bubble {
   display: inline-flex;
   align-items: center;
@@ -410,6 +431,11 @@ a:focus-visible {
   color: var(--muted);
 }
 
+.msg-user .msg-bubble blockquote {
+  border-left-color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .msg-bubble hr {
   border: none;
   border-top: 1px solid var(--border);
@@ -463,20 +489,16 @@ a:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.copy-code {
-  border: 1px solid rgba(255, 255, 255, 0.16);
+.code-block .copy-code {
+  border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.04);
   color: #c7cbdc;
-  border-radius: 8px;
-  padding: 4px 9px;
-  font-size: 0.73rem;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.copy-code:hover {
+.code-block .copy-code:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
+  opacity: 1;
 }
 
 .code-block code {
@@ -488,6 +510,10 @@ a:focus-visible {
   line-height: 1.55;
   color: #dfe4f0;
   white-space: pre;
+}
+
+.msg-user .code-block code {
+  color: #f4f6fb;
 }
 
 .tok-comment { color: #6f788e; font-style: italic; }
@@ -560,6 +586,7 @@ a:focus-visible {
   border: 0;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #ffffff;
+  font-size: 1rem;
   transition: transform 0.1s ease, filter 0.15s ease;
 }
 
@@ -589,18 +616,86 @@ a:focus-visible {
 /* ------------------------------- Toast ------------------------------------ */
 
 .error-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(116px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
   width: min(640px, calc(100% - 36px));
-  margin: 12px auto 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px 15px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--err) 15%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--err) 45%, transparent);
   color: var(--text);
   font-size: 0.9rem;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.2s ease both;
+}
+
+.error-toast[hidden] {
+  display: none;
+}
+
+.error-toast i {
+  color: var(--err);
+  margin-top: 3px;
+}
+
+.error-toast .toast-body {
+  min-width: 0;
 }
 
 .error-toast strong {
   color: var(--err);
+  display: block;
+}
+
+.error-toast .toast-action {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.toast-close {
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 2px 4px;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+
+/* ------------------------- Indicateur de réflexion ------------------------ */
+
+.thinking {
+  position: fixed;
+  left: 50%;
+  bottom: calc(116px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  box-shadow: var(--shadow);
+}
+
+.thinking.sr-only {
+  display: none;
 }
 
 /* ------------------------------- Animations ------------------------------- */
@@ -697,24 +792,19 @@ a:focus-visible {
     font-size: 0.92rem;
   }
 
-  .msg {
-    grid-template-columns: 30px minmax(0, 1fr);
-    gap: 8px;
-  }
-
   .msg-avatar {
     width: 30px;
     height: 30px;
+  }
+
+  .msg-content {
+    max-width: 100%;
   }
 
   .msg-bubble {
     font-size: 0.92rem;
     padding: 11px 13px;
     border-radius: 16px;
-  }
-
-  .msg-user .msg-avatar {
-    display: none;
   }
 
   .msg-bubble h1 { font-size: 1.22rem; }
@@ -772,10 +862,6 @@ a:focus-visible {
   .icon-button {
     width: 36px;
     height: 36px;
-  }
-
-  .msg {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .msg-avatar {
