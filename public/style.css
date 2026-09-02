@@ -240,10 +240,7 @@ a:focus-visible {
 }
 
 .msg-user {
-  /* Avec row-reverse, le bord principal "start" est la BORDURE DROITE :
-     flex-start colle donc le groupe (bulle + avatar) à l'extrême droite.
-     (flex-end poussait le groupe à gauche — c'était le bug.) */
-  justify-content: flex-start;
+  justify-content: flex-end;
   /* L'avatar utilisateur est ajouté en premier dans le DOM (cf. buildMessage).
      On inverse l'ordre visuel pour qu'il apparaisse à droite de la bulle,
      comme dans la plupart des messageries. */
@@ -307,29 +304,6 @@ a:focus-visible {
 
 .msg-time {
   font-variant-numeric: tabular-nums;
-}
-
-/* Étiquette du modèle Groq qui a réellement répondu (dans la méta du bot). */
-.msg-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 132px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.7rem;
-  color: var(--muted);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1px 6px;
-}
-
-.msg-model i {
-  flex: none;
-  font-size: 0.62rem;
-  color: var(--accent-strong);
 }
 
 /* Aspect commun aux deux bulles (même forme, même padding, même rayon).
@@ -622,159 +596,24 @@ a:focus-visible {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25), 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* ---------------------- Sélecteur de modèle IA ----------------------- */
-
-.model-picker {
-  position: relative;
+.model-select {
   flex: none;
-  display: flex;
-  align-items: center;
-}
-
-.model-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   height: 44px;
-  padding: 0 10px;
-  border-radius: 12px;
+  max-width: 170px;
   border: 1px solid var(--border);
+  border-radius: 12px;
   background: var(--surface-2);
-  color: var(--muted);
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
   font-size: 0.82rem;
   font-weight: 650;
-  white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  outline: none;
 }
 
-.model-btn:hover {
-  background: var(--bg-elev);
-  color: var(--text);
-}
-
-.model-btn-open,
-.model-btn-open:hover {
+.model-select:focus-visible {
   border-color: var(--accent);
-  color: var(--text);
-}
-
-.model-btn .fa-microchip {
-  color: var(--accent-strong);
-  font-size: 0.9rem;
-  flex: none;
-}
-
-.model-label {
-  max-width: 108px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.model-chevron {
-  font-size: 0.68rem;
-  transition: transform 0.15s ease;
-  flex: none;
-}
-
-.model-btn-open .model-chevron {
-  transform: rotate(180deg);
-}
-
-/* Menu déroulant : s'ouvre au-dessus de la barre (le composer est en bas
-   d'écran) et s'ancre à gauche du bouton pour rester dans la viewport. */
-.model-menu {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 0;
-  z-index: 30;
-  width: min(340px, calc(100vw - 40px));
-  max-height: min(400px, 62vh);
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bg-elev);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  animation: fadeIn 0.15s ease both;
-}
-
-.model-menu[hidden] {
-  display: none;
-}
-
-.model-option {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 100%;
-  text-align: left;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 11px;
-  background: transparent;
-  color: var(--text);
-  transition: background 0.12s ease;
-}
-
-.model-option:hover,
-.model-option:focus-visible {
-  background: var(--surface-2);
-}
-
-.model-option-active {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
-}
-
-.model-opt-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.model-opt-name {
-  font-size: 0.9rem;
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.model-speed {
-  flex: none;
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  color: var(--accent-strong);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-radius: 6px;
-  padding: 1px 6px;
-}
-
-.model-check {
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
-  color: var(--accent-strong);
-  font-size: 0.85rem;
-  opacity: 0;
-}
-
-.model-option-active .model-check {
-  opacity: 1;
-}
-
-.model-blurb {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.model-opt-id {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  color: var(--muted);
-  opacity: 0.75;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 #user-input {
@@ -1051,23 +890,15 @@ a:focus-visible {
 
   .composer {
     border-radius: 18px;
-    padding: 8px 8px 8px 14px;
+    padding: 8px;
     gap: 8px;
   }
 
-  .model-btn {
+  .model-select {
     height: 42px;
-    padding: 0 9px;
-    font-size: 0.78rem;
-    gap: 5px;
-  }
-
-  .model-label {
-    max-width: 84px;
-  }
-
-  .model-speed {
-    display: none;
+    max-width: 112px;
+    padding: 0 6px;
+    font-size: 0.76rem;
   }
 
   .send-button {
@@ -1110,16 +941,9 @@ a:focus-visible {
     font-size: 0.7rem;
   }
 
-  /* Très petit écran : le sélecteur se réduit à l'icône puce. */
-  .model-label,
-  .model-chevron {
-    display: none;
-  }
-
-  .model-btn {
-    width: 40px;
-    justify-content: center;
-    padding: 0;
+  .model-select {
+    max-width: 82px;
+    font-size: 0.7rem;
   }
 
   .messages {
