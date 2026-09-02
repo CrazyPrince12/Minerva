@@ -6,8 +6,7 @@
   "description": "Minerva — chatbot IA minimaliste développé par Crazy Prince Dev",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js",
-    "test": "node test/openrouter.test.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=20"

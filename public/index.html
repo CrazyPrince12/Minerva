@@ -77,23 +77,7 @@
 
   <footer class="composer-wrap">
     <form id="chat-form" class="composer" autocomplete="off">
-      <label for="model-select" class="sr-only">Modèle IA</label>
-      <select id="model-select" class="model-select" name="model" aria-label="Choisir le modèle IA">
-        <optgroup label="Groq">
-          <option value="openai/gpt-oss-20b" data-provider="groq" selected>GPT-OSS 20B</option>
-          <option value="openai/gpt-oss-120b" data-provider="groq">GPT-OSS 120B</option>
-          <option value="groq/compound" data-provider="groq">Groq Compound</option>
-          <option value="groq/compound-mini" data-provider="groq">Compound Mini</option>
-        </optgroup>
-        <optgroup label="OpenRouter">
-          <option
-            value="cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
-            data-provider="openrouter"
-            data-uncensored="true"
-            title="Dolphin Mistral 24B Venice Edition — modèle sans filtre (OpenRouter)"
-          >Dolphin 24B · Uncensored</option>
-        </optgroup>
-      </select>
+        </select>
       <label for="user-input" class="sr-only">Votre message à Minerva</label>
       <textarea
         id="user-input"
@@ -107,14 +91,9 @@
         <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
       </button>
     </form>
-    <p id="uncensored-note" class="composer-note uncensored-note" hidden>
-      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-      Mode sans filtre actif — Dolphin Mistral 24B via OpenRouter
     </p>
     <p class="composer-note"><span aria-hidden="true">Entrée</span> pour envoyer · <span aria-hidden="true">Maj + Entrée</span> pour un retour à la ligne</p>
   </footer>
-
-  <div id="error-toast" class="error-toast" role="alert" hidden></div>
 
   <div id="thinking" class="thinking sr-only" role="status" aria-live="assertive">
     <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>

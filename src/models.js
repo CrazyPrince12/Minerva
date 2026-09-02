@@ -3,11 +3,10 @@
 //
 // Deux fournisseurs cohabitent, sans jamais se mélanger :
 //   - `groq`       → https://api.groq.com/openai/v1   (clé GROQ_API_KEY)
-//   - `openrouter` → https://openrouter.ai/api/v1     (clé OPENROUTER_API_KEY)
+
 //
 // Chaque modèle est associé à UN fournisseur. Les modèles de secours
-// (fallbacks) sont toujours filtrés sur le même fournisseur : un modèle
-// OpenRouter ne peut donc jamais basculer vers Groq, et inversement.
+// (fallbacks) sont toujours filtrés sur le même fournisseur.
 
 export const PROVIDERS = {
   groq: {
@@ -23,45 +22,16 @@ export const PROVIDERS = {
     // Secours utilisé uniquement en cas de 429/5xx/404 sur le modèle principal.
     defaultFallbacks: "openai/gpt-oss-120b",
     keyHint: "Ajoute GROQ_API_KEY dans les variables d'environnement du projet, puis redéploie.",
-  },
-  openrouter: {
-    id: "openrouter",
-    label: "OpenRouter",
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKeyEnv: "OPENROUTER_API_KEY",
-    modelEnv: "OPENROUTER_MODEL",
-    fallbackEnv: "OPENROUTER_FALLBACK_MODELS",
-    temperatureEnv: "OPENROUTER_TEMPERATURE",
-    maxTokensEnv: "OPENROUTER_MAX_TOKENS",
-    defaultModel: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-    // Fallback vers Hermes 3 (uncensored) si Dolphin est indisponible.
-    defaultFallbacks: "nousresearch/hermes-3-llama-3.1-405b:free",
-    keyHint: "Ajoute OPENROUTER_API_KEY dans les variables d'environnement du projet, puis redéploie.",
-  },
+  }
 };
 
 export const DEFAULT_PROVIDER = "groq";
-
-// Modèle sans filtre (OpenRouter) — https://openrouter.ai/cognitivecomputations/dolphin-mistral-24b-venice-edition:free
-export const UNCENSORED_MODEL = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free";
 
 export const CHAT_MODELS = [
   { id: "openai/gpt-oss-20b", provider: "groq", label: "GPT-OSS 20B" },
   { id: "openai/gpt-oss-120b", provider: "groq", label: "GPT-OSS 120B" },
   { id: "groq/compound", provider: "groq", label: "Groq Compound" },
   { id: "groq/compound-mini", provider: "groq", label: "Compound Mini" },
-  {
-    id: UNCENSORED_MODEL,
-    provider: "openrouter",
-    label: "Dolphin Mistral 24B — Uncensored",
-    uncensored: true,
-  },
-  {
-    id: "nousresearch/hermes-3-llama-3.1-405b:free",
-    provider: "openrouter",
-    label: "Hermes 3 405B — Uncensored",
-    uncensored: true,
-  },
 ];
 
 const MODELS_BY_ID = new Map(CHAT_MODELS.map((model) => [model.id, model]));
@@ -75,7 +45,7 @@ export function isKnownModel(id) {
 }
 
 export function isUncensoredModel(id) {
-  return Boolean(getModel(id)?.uncensored);
+  return false;
 }
 
 export function getProviderOf(id) {

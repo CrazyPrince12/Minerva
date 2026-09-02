@@ -95,9 +95,8 @@ const server = http.createServer(async (req, res) => {
         model: process.env.GROQ_MODEL || "default",
         providers: {
           groq: { configured: Boolean((process.env.GROQ_API_KEY || "").trim()) },
-          openrouter: { configured: Boolean((process.env.OPENROUTER_API_KEY || "").trim()) },
         },
-        models: CHAT_MODELS.map(({ id, provider, label, uncensored = false }) => ({ id, provider, label, uncensored })),
+        models: CHAT_MODELS.map(({ id, provider, label }) => ({ id, provider, label })),
       })
     );
     return;

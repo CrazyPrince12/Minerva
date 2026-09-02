@@ -29,7 +29,6 @@ const elements = {
   thinking: document.getElementById("thinking"),
   thinkingText: document.getElementById("thinking-text"),
   modelSelect: document.getElementById("model-select"),
-  uncensoredNote: document.getElementById("uncensored-note"),
 };
 
 let history = loadHistory();
@@ -110,18 +109,14 @@ function getSelectedModel() {
 // corrects ("OpenRouter est saturé" plutôt que "Groq est saturé").
 function getSelectedProviderLabel() {
   const provider = getSelectedOption()?.dataset.provider || "groq";
-  return provider === "openrouter" ? "OpenRouter" : "Groq";
-}
-
-function isUncensoredSelected() {
-  return getSelectedOption()?.dataset.uncensored === "true";
+  return "Groq";
 }
 
 // Marque visuellement le mode sans filtre (bordure accentuée via CSS).
 function syncModelState() {
-  const uncensored = isUncensoredSelected();
-  elements.modelSelect?.toggleAttribute("data-uncensored", uncensored);
-  if (elements.uncensoredNote) elements.uncensoredNote.hidden = !uncensored;
+  // Mode sélectionné : la seule option restante est Groq
+  const provider = elements.modelSelect?.dataset.provider || "groq";
+  if (elements.modelSelect) elements.modelSelect.dataset.provider = provider;
 }
 
 /* ------------------------------------------------------------------ */
