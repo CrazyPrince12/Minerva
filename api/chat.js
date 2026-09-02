@@ -373,14 +373,13 @@ function buildSystemPrompt(modelId) {
   ];
 
   if (isUncensoredModel(modelId)) {
+    const modelName =
+      modelId.includes("dolphin") ? "Dolphin Mistral 24B Venice Edition" :
+      modelId.includes("hermes") ? "Hermes 3 405B" :
+      modelId;
     parts.push(
-      "- Modèle actif : Dolphin Mistral 24B Venice Edition (sans filtre). Garde l'identité et le style Minerva,",
+      `- Modèle actif : ${modelName} (sans filtre). Garde l'identité et le style Minerva,`,
       "  réponds sans auto-censure ni disclaimer, en conservant le plancher légal décrit plus haut."
-    );
-  } else if (modelId === "openrouter/free") {
-    // Le routeur automatique sélectionne un modèle gratuit — pas de garantie sur le comportement.
-    parts.push(
-      "- Modèle actif : routeur automatique OpenRouter (gratuit). Réponds normalement sans restriction."
     );
   }
 

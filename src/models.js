@@ -34,9 +34,8 @@ export const PROVIDERS = {
     temperatureEnv: "OPENROUTER_TEMPERATURE",
     maxTokensEnv: "OPENROUTER_MAX_TOKENS",
     defaultModel: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-    // Fallback automatique : openrouter/free route vers un modèle gratuit disponible.
-    // Si Dolphin échoue, on essaie le router automatique avant d'abandonner.
-    defaultFallbacks: "openrouter/free",
+    // Fallback vers Hermes 3 (uncensored) si Dolphin est indisponible.
+    defaultFallbacks: "nousresearch/hermes-3-llama-3.1-405b:free",
     keyHint: "Ajoute OPENROUTER_API_KEY dans les variables d'environnement du projet, puis redéploie.",
   },
 };
@@ -55,6 +54,12 @@ export const CHAT_MODELS = [
     id: UNCENSORED_MODEL,
     provider: "openrouter",
     label: "Dolphin Mistral 24B — Uncensored",
+    uncensored: true,
+  },
+  {
+    id: "nousresearch/hermes-3-llama-3.1-405b:free",
+    provider: "openrouter",
+    label: "Hermes 3 405B — Uncensored",
     uncensored: true,
   },
 ];
