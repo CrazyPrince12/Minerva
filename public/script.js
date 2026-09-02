@@ -920,12 +920,13 @@ async function sendMessage(input) {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let reply = null;
   let lastError = null;
+  let responseData = null;
 
   try {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const data = await requestReply(payload, controller.signal);
-        reply = data.reply;
+        responseData = await requestReply(payload, controller.signal);
+        reply = responseData.reply;
         lastError = null;
         break;
       } catch (error) {
@@ -942,9 +943,9 @@ async function sendMessage(input) {
 
     if (reply) {
       const ts = Date.now();
-      // `data.model` = le modèle Groq qui a réellement répondu (peut différer
+      // `responseData.model` = le modèle Groq qui a réellement répondu (peut différer
       // du modèle demandé si un secours a dû prendre le relais).
-      const usedModel = data.model;
+      const usedModel = responseData?.model;
       history.push({ role: "assistant", content: reply, ts, model: usedModel });
       saveHistory();
 
