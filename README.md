@@ -16,8 +16,8 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 - Conversation **strictement chronologique** : le message le plus ancien en haut, la réponse la plus récente en bas.
 - Bulles alignées comme une messagerie classique : **Minerva à gauche** (avec avatar), **vous à droite**, même gabarit de bulle des deux côtés.
 - **Sélecteur de modèle IA simple dans la barre de saisie** : le client envoie seulement l'identifiant du modèle choisi ; le backend garde `openai/gpt-oss-20b` par défaut si aucun modèle valide n'est fourni.
-- Rendu **markdown** : gras, italique, listes, liens, tableaux, blocs de code.
-- Blocs de code avec **coloration syntaxique légère** et bouton **Copier**. Bouton *Copier* également sur chaque message.
+- Réponses affichées en **texte brut, telles que renvoyées par l'API** (aucun reformatage côté client : le prompt système demande au modèle de structurer en texte simple — listes numérotées, lignes vides — sans Markdown).
+- Bouton **Copier** sur chaque message.
 - Barre de saisie auto-extensible, envoi avec **Entrée**, saut de ligne avec **Maj+Entrée**.
 - Indicateur « Minerva réfléchit… » et **reprise automatique** si Groq renvoie *trop de requêtes* (429) ou une erreur serveur (5xx), côté serveur **et** côté client.
 - Bascule automatique sur un **modèle de secours** si le modèle principal est saturé ou indisponible.
@@ -52,7 +52,7 @@ minerva/
 ├── public/                 # tout ce qui est envoyé au navigateur
 │   ├── index.html          # interface de chat
 │   ├── style.css           # styles responsive (Flexbox)
-│   ├── script.js           # logique front (localStorage, markdown, envoi, retries)
+│   ├── script.js           # logique front (localStorage, affichage brut, envoi, retries)
 │   └── assets/
 │       ├── logo.svg        # logo vectoriel (casque de Minerve + regards de chouette)
 │       └── og-image.png    # image de prévisualisation pour le partage
