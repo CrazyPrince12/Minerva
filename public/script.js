@@ -315,12 +315,16 @@ function renderCodeBlock(code, lang = "") {
 function renderTable(rows) {
   const table = document.createElement("table");
   table.style.cssText = "border-collapse:collapse;width:100%;font-size:0.92rem;";
+
+  const maxCols = rows.reduce((n, row) => Math.max(n, row.length), 0);
+  const pad = (cells) => [...cells, ...Array(Math.max(0, maxCols - cells.length)).fill("")];
+
   const head = rows[0] || [];
   const thead = document.createElement("thead");
   const trHead = document.createElement("tr");
-  head.forEach((cell) => {
+  pad(head).forEach((cell) => {
     const th = document.createElement("th");
-    th.textContent = cell.trim();
+    th.textContent = cell;
     th.style.cssText = "border:1px solid var(--border);padding:7px 10px;text-align:left;background:var(--surface-2);";
     trHead.append(th);
   });
@@ -330,9 +334,9 @@ function renderTable(rows) {
   const tbody = document.createElement("tbody");
   rows.slice(1).forEach((row) => {
     const tr = document.createElement("tr");
-    row.forEach((cell) => {
+    pad(row).forEach((cell) => {
       const td = document.createElement("td");
-      td.textContent = cell.trim();
+      td.textContent = cell;
       td.style.cssText = "border:1px solid var(--border);padding:7px 10px;";
       tr.append(td);
     });
@@ -342,97 +346,191 @@ function renderTable(rows) {
   return table;
 }
 
-function parseNodes(markdown, container) {
-  // Lignes de tableau
-  const tableRegex = /^\|.+\|\s*$/gm;
-  const tableMatches = [];
-  let tableCounter = 0;
-  const tableStripped = markdown.replace(tableRegex, (match) => {
-    tableMatches.push(match);
-    return `\u0000TABLE${tableCounter++}\u0000`;
-  });
+/* ------------------------------------------------------------------ */
+/* Parseur Markdown : découpage en blocs ligne par ligne.              */
+/*                                                                     */
+/* Contrairement à l'ancienne version (remplacement des lignes de      */
+/* tableau par des jetons TABLE0/TABLE1 puis découpage sur les doubles */
+/* sauts de ligne), les lignes d'un même tableau sont regroupées ici   */
+/* car elles ne sont séparées que par un simple saut de ligne. Les     */
+/* blocs de code sont détectés AVANT les tableaux (des « | a | b | »   */
+/* dans du code ne doivent pas être interprétés comme un tableau) et   */
+/* aucun jeton temporaire ne peut fuiter dans le rendu.                */
+/* ------------------------------------------------------------------ */
 
-  const blockRegex = /```([^\n]*)\n([\s\S]*?)```/g;
-  const codeBlocks = [];
-  const codeStripped = tableStripped.replace(blockRegex, (match, lang, code) => {
-    const idx = codeBlocks.length;
-    codeBlocks.push({ code: code.replace(/\n$/, ""), lang: lang.trim() });
-    return `\u0000CODE${idx}\u0000`;
-  });
+// __MINERVA_PARSER_BEGIN__
 
-  const parts = codeStripped.split(/\n\n+/);
+function splitTableRow(line) {
+  const trimmed = line.trim();
+  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
+  return trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+}
 
-  for (const raw of parts) {
-    if (!raw.trim()) continue;
+function isSeparatorRow(cells) {
+  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
+}
 
-    const tableTag = raw.match(/^\u0000TABLE\d+\u0000$/);
-    if (tableTag) {
-      const tokenIndex = Number(tableTag[0].replace(/\D/g, ""));
-      let rows = [];
-      if (tableMatches[tokenIndex]) {
-        rows = tableMatches[tokenIndex]
-          .split("\n")
-          .filter((line) => line.trim().startsWith("|"))
-          .map((line) => line.trim().slice(1, -1).split("|"))
-          .filter((cells) => !cells.every((c) => /^\s*[-: ]+\s*$/.test(c)));
+function isStructuralStart(line) {
+  return (
+    /^\s*```/.test(line) ||
+    splitTableRow(line) !== null ||
+    /^#{1,6}[ \t]+/.test(line.trim()) ||
+    /^\s*>/.test(line) ||
+    /^\s*[-*+]\s+/.test(line) ||
+    /^\s*\d+[.)]\s+/.test(line)
+  );
+}
+
+function parseMarkdownBlocks(markdown) {
+  const source = String(markdown ?? "").replace(/\r\n?/g, "\n");
+  const lines = source.split("\n");
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (!line.trim()) {
+      i += 1;
+      continue;
+    }
+
+    // 1) Bloc de code : on avale tout jusqu'à la fermeture, y compris les
+    //    lignes vides et les lignes qui ressemblent à un tableau.
+    const fence = line.trim().match(/^```(\S*)\s*$/);
+    if (fence) {
+      const codeLines = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i += 1;
       }
-      if (rows.length) container.append(renderTable(rows));
+      if (i < lines.length) i += 1; // ligne de fermeture
+      blocks.push({ type: "code", lang: fence[1] || "", code: codeLines.join("\n").replace(/\n$/, "") });
       continue;
     }
 
-    const codeTag = raw.match(/^\u0000CODE(\d+)\u0000$/);
-    if (codeTag) {
-      const item = codeBlocks[Number(codeTag[1])];
-      if (item) container.append(renderCodeBlock(item.code, item.lang));
+    // 2) Tableau : toutes les lignes « | ... | » consécutives forment un
+    //    SEUL bloc (les lignes de séparation --- sont retirées au rendu).
+    const cells = splitTableRow(line);
+    if (cells) {
+      const rows = [cells];
+      i += 1;
+      while (i < lines.length) {
+        const nextCells = splitTableRow(lines[i]);
+        if (!nextCells) break;
+        rows.push(nextCells);
+        i += 1;
+      }
+      const tableRows = rows.filter((row) => !isSeparatorRow(row));
+      if (tableRows.length) blocks.push({ type: "table", rows: tableRows });
       continue;
     }
 
-    const lines = raw.split("\n");
+    // 3) Titre
+    const heading = line.trim().match(/^(#{1,6})[ \t]+(.+)$/);
+    if (heading) {
+      blocks.push({ type: "heading", level: Math.min(heading[1].length, 4), text: heading[2].trim() });
+      i += 1;
+      continue;
+    }
 
-    if (lines.every((line) => /^>\s?/.test(line) || !line.trim())) {
+    // 4) Citation
+    if (/^\s*>/.test(line)) {
+      const quoted = [line.replace(/^\s*>\s?/, "")];
+      i += 1;
+      while (i < lines.length && /^\s*>/.test(lines[i])) {
+        quoted.push(lines[i].replace(/^\s*>\s?/, ""));
+        i += 1;
+      }
+      blocks.push({ type: "quote", text: quoted.join(" ") });
+      continue;
+    }
+
+    // 5) Liste (ordonnée ou non) : éléments consécutifs du même type. Une
+    //    ligne parasite (paragraphe collé, autre type de liste) coupe la
+    //    liste proprement au lieu de tout laisser tomber dans un paragraphe.
+    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      const isOrdered = Boolean(ordered);
+      const items = [isOrdered ? ordered[1] : unordered[1]];
+      i += 1;
+      while (i < lines.length) {
+        if (!lines[i].trim()) break;
+        const nextOrdered = lines[i].match(/^\s*\d+[.)]\s+(.+)$/);
+        const nextUnordered = lines[i].match(/^\s*[-*+]\s+(.+)$/);
+        if (isOrdered && nextOrdered) {
+          items.push(nextOrdered[1]);
+          i += 1;
+        } else if (!isOrdered && nextUnordered) {
+          items.push(nextUnordered[1]);
+          i += 1;
+        } else {
+          break;
+        }
+      }
+      blocks.push({ type: isOrdered ? "ol" : "ul", items: items.map((item) => item.trim()) });
+      continue;
+    }
+
+    // 6) Paragraphe simple : on accumule jusqu'à une ligne vide ou un début
+    //    de bloc structurel (titre, liste, tableau, citation, code).
+    const textLines = [line];
+    i += 1;
+    while (i < lines.length && lines[i].trim() && !isStructuralStart(lines[i])) {
+      textLines.push(lines[i]);
+      i += 1;
+    }
+    blocks.push({ type: "text", text: textLines.join("\n").trim() });
+  }
+
+  return blocks;
+}
+
+// __MINERVA_PARSER_END__
+
+function renderBlock(container, block) {
+  switch (block.type) {
+    case "code":
+      container.append(renderCodeBlock(block.code, block.lang));
+      break;
+
+    case "table":
+      if (block.rows.length) container.append(renderTable(block.rows));
+      break;
+
+    case "heading": {
+      const heading = document.createElement(`h${block.level}`);
+      heading.innerHTML = inlineMarkdown(block.text);
+      container.append(heading);
+      break;
+    }
+
+    case "quote": {
       const quote = document.createElement("blockquote");
-      quote.innerHTML = inlineMarkdown(lines.map((l) => l.replace(/^>\s?/, "")).join(" "));
+      quote.innerHTML = inlineMarkdown(block.text);
       container.append(quote);
-      continue;
+      break;
     }
 
-    if (lines.every((line) => /^#{1,4}\s/.test(line) || !line.trim())) {
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const level = (line.match(/^#+/) || [""])[0].length;
-        const tag = ["h1", "h2", "h3", "h4"][Math.min(level, 4) - 1];
-        const h = document.createElement(tag);
-        h.innerHTML = inlineMarkdown(line.replace(/^#+\s?/, ""));
-        container.append(h);
+    case "ul":
+    case "ol": {
+      const list = document.createElement(block.type);
+      for (const item of block.items) {
+        const li = document.createElement("li");
+        li.innerHTML = inlineMarkdown(item);
+        list.append(li);
       }
-      continue;
+      container.append(list);
+      break;
     }
 
-    if (lines.every((line) => /^\s*[-*+]\s+/.test(line) || !line.trim())) {
-      const ul = document.createElement("ul");
-      lines.filter((line) => /^\s*[-*+]\s+/.test(line)).forEach((line) => {
-        const li = document.createElement("li");
-        li.innerHTML = inlineMarkdown(line.replace(/^\s*[-*+]\s+/, ""));
-        ul.append(li);
-      });
-      container.append(ul);
-      continue;
+    default: {
+      const paragraph = document.createElement("p");
+      paragraph.innerHTML = inlineMarkdown(block.text || "");
+      container.append(paragraph);
     }
-
-    if (lines.every((line) => /^\s*\d+[.)]\s+/.test(line) || !line.trim())) {
-      const ol = document.createElement("ol");
-      lines.filter((line) => /^\s*\d+[.)]\s+/.test(line)).forEach((line) => {
-        const li = document.createElement("li");
-        li.innerHTML = inlineMarkdown(line.replace(/^\s*\d+[.)]\s+/, ""));
-        ol.append(li);
-      });
-      container.append(ol);
-      continue;
-    }
-
-    const p = document.createElement("p");
-    p.innerHTML = inlineMarkdown(lines.join("\n"));
-    container.append(p);
   }
 }
 
@@ -457,7 +555,9 @@ function inlineMarkdown(text) {
 
 function renderMarkdown(container, text) {
   container.innerHTML = "";
-  parseNodes(text, container);
+  for (const block of parseMarkdownBlocks(text)) {
+    renderBlock(container, block);
+  }
 }
 
 /* ------------------------------------------------------------------ */
