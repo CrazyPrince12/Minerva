@@ -219,12 +219,6 @@ function scrollToBottom(force = false) {
   }
 }
 
-function escapeHtml(value) {
-  const div = document.createElement("div");
-  div.textContent = value;
-  return div.innerHTML;
-}
-
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -243,322 +237,31 @@ function sleep(ms, signal) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Markdown simple (gras, italique, liens, listes, code, tableaux)      */
-/* ------------------------------------------------------------------ */
-
-const LANGUAGE_KEYWORDS = {
-  js: /(const|let|var|function|return|if|else|for|while|import|export|from|class|new|try|catch|async|await|throw|typeof|extends|default|switch|case|break|continue|null|undefined|true|false|=>)\b/g,
-  ts: /(const|let|var|function|return|if|else|for|while|import|export|from|class|new|try|catch|async|await|throw|typeof|extends|default|switch|case|break|interface|type|enum|implements|public|private|readonly|=>)\b/g,
-  python: /(def|return|if|elif|else|for|while|import|from|class|try|except|finally|with|as|lambda|None|True|False|and|or|not|in|is|raise|pass)\b/g,
-  css: /(@media|@import|@keyframes|color|background|border|margin|padding|display|flex|grid|font|width|height|position|top|left|right|bottom|transition|animation|transform|opacity|z-index|overflow|align-items|justify-content|gap)\b/g,
-};
-
-function escapeCode(code) {
-  return escapeHtml(code).replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
-}
-
-function highlightCode(code, lang = "") {
-  const normalized = String(lang).toLowerCase();
-  const safe = escapeCode(code);
-  const tokens = LANGUAGE_KEYWORDS[normalized] ? LANGUAGE_KEYWORDS[normalized].source.replace(/\\\\b/g, "\\b") : null;
-
-  let highlighted = safe;
-  if (tokens) {
-    try {
-      highlighted = safe.replace(new RegExp(tokens, "g"), '<span class="tok-keyword">$1</span>');
-    } catch {
-      highlighted = safe;
-    }
-  }
-
-  // Heuristique simple strings / comments selon le langage.
-  if (normalized === "js" || normalized === "ts" || normalized === "python") {
-    highlighted = highlighted
-      .replace(/(\/\/[^\n<]*|#[^\n<]*)/g, '<span class="tok-comment">$1</span>')
-      .replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="tok-string">$1</span>');
-  } else if (normalized === "css" || normalized === "html") {
-    highlighted = highlighted
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="tok-comment">$1</span>')
-      .replace(/(#[0-9a-fA-F]{3,8}\b|\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms)\b)/g, '<span class="tok-number">$1</span>');
-  }
-
-  return highlighted;
-}
-
-function renderCodeBlock(code, lang = "") {
-  const wrapper = document.createElement("div");
-  wrapper.className = "code-block";
-
-  const header = document.createElement("div");
-  header.className = "code-header";
-
-  const langSpan = document.createElement("span");
-  langSpan.className = "code-lang";
-  langSpan.textContent = lang || "code";
-
-  const copy = document.createElement("button");
-  copy.className = "copy-code";
-  copy.type = "button";
-  copy.dataset.copyCode = "";
-  copy.setAttribute("aria-label", "Copier le code");
-  copy.append(icon("fa-regular fa-copy"), document.createTextNode("Copier"));
-
-  header.append(langSpan, copy);
-
-  const codeEl = document.createElement("code");
-  codeEl.innerHTML = highlightCode(code, lang);
-
-  wrapper.append(header, codeEl);
-  return wrapper;
-}
-
-function renderTable(rows) {
-  const table = document.createElement("table");
-  table.style.cssText = "border-collapse:collapse;width:100%;font-size:0.92rem;";
-
-  const maxCols = rows.reduce((n, row) => Math.max(n, row.length), 0);
-  const pad = (cells) => [...cells, ...Array(Math.max(0, maxCols - cells.length)).fill("")];
-
-  const head = rows[0] || [];
-  const thead = document.createElement("thead");
-  const trHead = document.createElement("tr");
-  pad(head).forEach((cell) => {
-    const th = document.createElement("th");
-    th.textContent = cell;
-    th.style.cssText = "border:1px solid var(--border);padding:7px 10px;text-align:left;background:var(--surface-2);";
-    trHead.append(th);
-  });
-  thead.append(trHead);
-  table.append(thead);
-
-  const tbody = document.createElement("tbody");
-  rows.slice(1).forEach((row) => {
-    const tr = document.createElement("tr");
-    pad(row).forEach((cell) => {
-      const td = document.createElement("td");
-      td.textContent = cell;
-      td.style.cssText = "border:1px solid var(--border);padding:7px 10px;";
-      tr.append(td);
-    });
-    tbody.append(tr);
-  });
-  table.append(tbody);
-  return table;
-}
-
-/* ------------------------------------------------------------------ */
-/* Parseur Markdown : découpage en blocs ligne par ligne.              */
+/* Rendu des réponses : texte brut, tel que renvoyé par l'API           */
 /*                                                                     */
-/* Contrairement à l'ancienne version (remplacement des lignes de      */
-/* tableau par des jetons TABLE0/TABLE1 puis découpage sur les doubles */
-/* sauts de ligne), les lignes d'un même tableau sont regroupées ici   */
-/* car elles ne sont séparées que par un simple saut de ligne. Les     */
-/* blocs de code sont détectés AVANT les tableaux (des « | a | b | »   */
-/* dans du code ne doivent pas être interprétés comme un tableau) et   */
-/* aucun jeton temporaire ne peut fuiter dans le rendu.                */
+/* Historique : deux versions successives d'un mini-parseur Markdown   */
+/* ont laissé fuiter des jetons « TABLE0 / TABLE1 … » dans l'interface */
+/* (voir PR #14). Décision : plus AUCUN reformatage côté client. La    */
+/* réponse du modèle est affichée telle quelle, avec ses sauts de      */
+/* ligne (white-space: pre-wrap dans style.css). Aucune transformation, */
+/* aucun jeton temporaire, aucun innerHTML : donc rien ne peut fuiter   */
+/* et rien ne peut être injecté.                                       */
 /* ------------------------------------------------------------------ */
 
-// __MINERVA_PARSER_BEGIN__
+// __MINERVA_RENDER_BEGIN__
 
-function splitTableRow(line) {
-  const trimmed = line.trim();
-  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
-  return trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+function normalizeReply(text) {
+  // Seule « transformation » : normaliser les fins de ligne et retirer les
+  // espaces/sauts de ligne superflus aux extrémités. Le contenu lui-même
+  // (puces, étoiles, barres verticales, backticks…) n'est jamais touché.
+  return String(text ?? "").replace(/\r\n?/g, "\n").trim();
 }
 
-function isSeparatorRow(cells) {
-  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
+function renderPlainText(container, text) {
+  container.textContent = normalizeReply(text);
 }
 
-function isStructuralStart(line) {
-  return (
-    /^\s*```/.test(line) ||
-    splitTableRow(line) !== null ||
-    /^#{1,6}[ \t]+/.test(line.trim()) ||
-    /^\s*>/.test(line) ||
-    /^\s*[-*+]\s+/.test(line) ||
-    /^\s*\d+[.)]\s+/.test(line)
-  );
-}
-
-function parseMarkdownBlocks(markdown) {
-  const source = String(markdown ?? "").replace(/\r\n?/g, "\n");
-  const lines = source.split("\n");
-  const blocks = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (!line.trim()) {
-      i += 1;
-      continue;
-    }
-
-    // 1) Bloc de code : on avale tout jusqu'à la fermeture, y compris les
-    //    lignes vides et les lignes qui ressemblent à un tableau.
-    const fence = line.trim().match(/^```(\S*)\s*$/);
-    if (fence) {
-      const codeLines = [];
-      i += 1;
-      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
-        codeLines.push(lines[i]);
-        i += 1;
-      }
-      if (i < lines.length) i += 1; // ligne de fermeture
-      blocks.push({ type: "code", lang: fence[1] || "", code: codeLines.join("\n").replace(/\n$/, "") });
-      continue;
-    }
-
-    // 2) Tableau : toutes les lignes « | ... | » consécutives forment un
-    //    SEUL bloc (les lignes de séparation --- sont retirées au rendu).
-    const cells = splitTableRow(line);
-    if (cells) {
-      const rows = [cells];
-      i += 1;
-      while (i < lines.length) {
-        const nextCells = splitTableRow(lines[i]);
-        if (!nextCells) break;
-        rows.push(nextCells);
-        i += 1;
-      }
-      const tableRows = rows.filter((row) => !isSeparatorRow(row));
-      if (tableRows.length) blocks.push({ type: "table", rows: tableRows });
-      continue;
-    }
-
-    // 3) Titre
-    const heading = line.trim().match(/^(#{1,6})[ \t]+(.+)$/);
-    if (heading) {
-      blocks.push({ type: "heading", level: Math.min(heading[1].length, 4), text: heading[2].trim() });
-      i += 1;
-      continue;
-    }
-
-    // 4) Citation
-    if (/^\s*>/.test(line)) {
-      const quoted = [line.replace(/^\s*>\s?/, "")];
-      i += 1;
-      while (i < lines.length && /^\s*>/.test(lines[i])) {
-        quoted.push(lines[i].replace(/^\s*>\s?/, ""));
-        i += 1;
-      }
-      blocks.push({ type: "quote", text: quoted.join(" ") });
-      continue;
-    }
-
-    // 5) Liste (ordonnée ou non) : éléments consécutifs du même type. Une
-    //    ligne parasite (paragraphe collé, autre type de liste) coupe la
-    //    liste proprement au lieu de tout laisser tomber dans un paragraphe.
-    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
-    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
-    if (unordered || ordered) {
-      const isOrdered = Boolean(ordered);
-      const items = [isOrdered ? ordered[1] : unordered[1]];
-      i += 1;
-      while (i < lines.length) {
-        if (!lines[i].trim()) break;
-        const nextOrdered = lines[i].match(/^\s*\d+[.)]\s+(.+)$/);
-        const nextUnordered = lines[i].match(/^\s*[-*+]\s+(.+)$/);
-        if (isOrdered && nextOrdered) {
-          items.push(nextOrdered[1]);
-          i += 1;
-        } else if (!isOrdered && nextUnordered) {
-          items.push(nextUnordered[1]);
-          i += 1;
-        } else {
-          break;
-        }
-      }
-      blocks.push({ type: isOrdered ? "ol" : "ul", items: items.map((item) => item.trim()) });
-      continue;
-    }
-
-    // 6) Paragraphe simple : on accumule jusqu'à une ligne vide ou un début
-    //    de bloc structurel (titre, liste, tableau, citation, code).
-    const textLines = [line];
-    i += 1;
-    while (i < lines.length && lines[i].trim() && !isStructuralStart(lines[i])) {
-      textLines.push(lines[i]);
-      i += 1;
-    }
-    blocks.push({ type: "text", text: textLines.join("\n").trim() });
-  }
-
-  return blocks;
-}
-
-// __MINERVA_PARSER_END__
-
-function renderBlock(container, block) {
-  switch (block.type) {
-    case "code":
-      container.append(renderCodeBlock(block.code, block.lang));
-      break;
-
-    case "table":
-      if (block.rows.length) container.append(renderTable(block.rows));
-      break;
-
-    case "heading": {
-      const heading = document.createElement(`h${block.level}`);
-      heading.innerHTML = inlineMarkdown(block.text);
-      container.append(heading);
-      break;
-    }
-
-    case "quote": {
-      const quote = document.createElement("blockquote");
-      quote.innerHTML = inlineMarkdown(block.text);
-      container.append(quote);
-      break;
-    }
-
-    case "ul":
-    case "ol": {
-      const list = document.createElement(block.type);
-      for (const item of block.items) {
-        const li = document.createElement("li");
-        li.innerHTML = inlineMarkdown(item);
-        list.append(li);
-      }
-      container.append(list);
-      break;
-    }
-
-    default: {
-      const paragraph = document.createElement("p");
-      paragraph.innerHTML = inlineMarkdown(block.text || "");
-      container.append(paragraph);
-    }
-  }
-}
-
-function inlineMarkdown(text) {
-  let html = escapeHtml(text);
-
-  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-
-  const boldRegex = /\*\*([^*]+)\*\*|__([^_]+)__/g;
-  html = html.replace(boldRegex, "<strong>$1$2</strong>");
-
-  const italicRegex = /(?<!\*)\*([^*\n]+)\*(?!\*)|(?<![_])_([^_\n]+)_(?![_])/g;
-  html = html.replace(italicRegex, "<em>$1$2</em>");
-
-  // Code inline après le gras/italique, pour éviter de casser les balises.
-  const codeRegex = /`([^`\n]+)`/g;
-  html = html.replace(codeRegex, '<code class="inline-code">$1</code>');
-
-  return html;
-}
-
-function renderMarkdown(container, text) {
-  container.innerHTML = "";
-  for (const block of parseMarkdownBlocks(text)) {
-    renderBlock(container, block);
-  }
-}
+// __MINERVA_RENDER_END__
 
 /* ------------------------------------------------------------------ */
 /* Rendu des messages (ordre chronologique : toujours append)           */
@@ -597,7 +300,7 @@ function buildMessage(role, content, options = {}) {
   if (!isBot) {
     bubble.textContent = content;
   } else {
-    renderMarkdown(bubble, content);
+    renderPlainText(bubble, content);
   }
 
   contentWrap.append(bubble);
@@ -750,13 +453,6 @@ async function copyText(text, button) {
 }
 
 document.addEventListener("click", (event) => {
-  const copyCodeBtn = event.target.closest("[data-copy-code]");
-  if (copyCodeBtn) {
-    const code = copyCodeBtn.closest(".code-block")?.querySelector("code")?.textContent || "";
-    copyText(code, copyCodeBtn);
-    return;
-  }
-
   const copyMsgBtn = event.target.closest("[data-copy-message]");
   if (copyMsgBtn) {
     const bubble = copyMsgBtn.closest(".msg")?.querySelector(".msg-bubble");

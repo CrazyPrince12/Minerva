@@ -353,8 +353,7 @@ a:focus-visible {
   display: none;
 }
 
-.copy-msg,
-.copy-code {
+.copy-msg {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -368,14 +367,12 @@ a:focus-visible {
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-.copy-msg:hover,
-.copy-code:hover {
+.copy-msg:hover {
   opacity: 1;
   background: var(--surface-2);
 }
 
-.copy-msg i,
-.copy-code i {
+.copy-msg i {
   font-size: 0.8rem;
 }
 
@@ -408,162 +405,17 @@ a:focus-visible {
   animation-delay: 0.36s;
 }
 
-/* ------------------------------- Markdown --------------------------------- */
-
-.msg-bubble > :first-child {
-  margin-top: 0;
-}
-
-.msg-bubble > :last-child {
-  margin-bottom: 0;
-}
-
-.msg-bubble p,
-.msg-bubble ul,
-.msg-bubble ol,
-.msg-bubble blockquote {
-  margin: 0.65em 0;
-}
-
-.msg-bubble h1,
-.msg-bubble h2,
-.msg-bubble h3,
-.msg-bubble h4 {
-  margin: 0.9em 0 0.4em;
-  line-height: 1.25;
-}
-
-.msg-bubble h1 { font-size: 1.35rem; }
-.msg-bubble h2 { font-size: 1.22rem; }
-.msg-bubble h3 { font-size: 1.08rem; }
-.msg-bubble h4 { font-size: 1rem; }
+/* ------------------------------ Réponses ---------------------------------- */
+/* Les réponses de Minerva sont affichées en texte brut, exactement comme
+   renvoyées par l'API (aucun rendu Markdown côté client). `white-space:
+   pre-wrap` sur .msg-bubble conserve les sauts de ligne et l'indentation
+   des listes ; les URL restent cliquables via le navigateur/OS le cas échéant. */
 
 .msg-bubble a {
   color: var(--accent-strong);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-
-.msg-user .msg-bubble a {
-  /* Même couleur d'accent que le bot (les deux bulles ont maintenant le
-     même fond, donc on garde la même couleur de lien). */
-  color: var(--accent-strong);
-}
-
-.msg-bubble ul,
-.msg-bubble ol {
-  padding-left: 1.25em;
-}
-
-.msg-bubble li {
-  margin: 0.2em 0;
-}
-
-.msg-bubble blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: 12px;
-  color: var(--muted);
-}
-
-.msg-user .msg-bubble blockquote {
-  /* Même rendu que pour le bot : la bulle utilisateur a maintenant le
-     même fond, donc on garde la même couleur de blockquote. */
-  border-left-color: var(--accent);
-  color: var(--muted);
-}
-
-.msg-bubble hr {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 14px 0;
-}
-
-.inline-code {
-  font-family: var(--mono);
-  font-size: 0.88em;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1.5px 6px;
-}
-
-.msg-user .inline-code {
-  /* Même fond que pour le bot : la bulle utilisateur a maintenant le
-     même fond, donc on garde le même style d'inline-code. */
-  background: var(--surface-2);
-  border-color: var(--border);
-}
-
-/* Code blocks */
-.code-block {
-  position: relative;
-  margin: 12px 0;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: #0b0d13;
-  overflow: hidden;
-}
-
-.msg-user .code-block,
-.msg-user .msg-bubble pre {
-  /* Même style de bordure que pour le bot. */
-  border-color: var(--border);
-}
-
-.code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px 6px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 0.74rem;
-  color: #9aa3b8;
-}
-
-.code-lang {
-  font-family: var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.code-block .copy-code {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
-  color: #c7cbdc;
-}
-
-.code-block .copy-code:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  opacity: 1;
-}
-
-.code-block code {
-  display: block;
-  overflow-x: auto;
-  padding: 13px 15px;
-  font-family: var(--mono);
-  font-size: 0.88rem;
-  line-height: 1.55;
-  color: #dfe4f0;
-  white-space: pre;
-}
-
-.msg-user .code-block code {
-  /* Même couleur de code que pour le bot. */
-  color: #dfe4f0;
-}
-
-.tok-comment { color: #6f788e; font-style: italic; }
-.tok-string { color: #7de3a5; }
-.tok-number { color: #f5b06b; }
-.tok-keyword { color: #a68bff; font-weight: 600; }
-.tok-function { color: #6ab7ff; }
-.tok-tag { color: #ff7fa5; }
-.tok-attr { color: #f5b06b; }
-.tok-builtin { color: #6ab7ff; }
 
 /* ------------------------------- Composer --------------------------------- */
 
@@ -865,16 +717,6 @@ a:focus-visible {
     font-size: 0.92rem;
     padding: 11px 13px;
     border-radius: 16px;
-  }
-
-  .msg-bubble h1 { font-size: 1.22rem; }
-  .msg-bubble h2 { font-size: 1.12rem; }
-  .msg-bubble h3 { font-size: 1.02rem; }
-  .msg-bubble h4 { font-size: 0.96rem; }
-
-  .code-block code {
-    font-size: 0.82rem;
-    padding: 11px 12px;
   }
 
   .messages {
