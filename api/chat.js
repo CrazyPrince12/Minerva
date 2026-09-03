@@ -1,6 +1,9 @@
 // api/chat.js
 // Proxy serverless compatible Vercel (/api/chat) et Render (via server.js).
-// La clé GROQ_API_KEY est lue uniquement côté serveur : jamais exposée au client.
+// Les clés (GROQ_API_KEY, HF_TOKEN) sont lues uniquement côté serveur :
+// jamais exposées au client. Le sélecteur du frontend envoie seulement un
+// identifiant abstrait ("dolphin-24b", "groq/compound", ...) : le nom exact
+// du fournisseur et du modèle reste un détail interne au backend.
 
 import "dotenv/config";
 import OpenAI from "openai";
@@ -14,59 +17,101 @@ const DEFAULT_MAX_TOKENS = Number.parseInt(process.env.GROQ_MAX_TOKENS || "4096"
 const TOTAL_DEADLINE_MS = Number.parseInt(process.env.GROQ_DEADLINE_MS || "26000", 10);
 const ATTEMPTS_PER_MODEL = 2;
 
-// Modèle principal : openai/gpt-oss-20b (inchangé).
+// Modèle principal Groq : openai/gpt-oss-20b (inchangé).
 // Le modèle de secours n'est utilisé QUE si le principal renvoie 429/5xx/404 :
 // il ne change rien au fonctionnement normal.
 // Désactiver les secours : GROQ_FALLBACK_MODELS=none
 const DEFAULT_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_FALLBACK_MODELS = "openai/gpt-oss-120b";
 
-const ALLOWED_CHAT_MODELS = new Set([
+// Fournisseurs supportés par le proxy. Chacun pointe vers son endpoint
+// OpenAI-compatible et lit sa propre clé dans l'environnement.
+const PROVIDERS = {
+  groq: {
+    baseURL: "https://api.groq.com/openai/v1",
+    apiKeyEnv: "GROQ_API_KEY",
+  },
+  hf: {
+    baseURL: "https://router.huggingface.co/v1",
+    apiKeyEnv: "HF_TOKEN",
+  },
+};
+
+// Option "Dolphin 24B" affichée dans la barre de saisie (valeur abstraite) →
+// modèle Hugging Face réel (le "featherless-ai" est un fournisseur du routeur HF).
+const DOLPHIN_OPTION = "dolphin-24b";
+const DOLPHIN_API_MODEL = "dphn/Dolphin-Mistral-24B-Venice-Edition:featherless-ai";
+
+// Identifiants Groq que le client peut demander dans le sélecteur.
+const GROQ_SELECTABLE = new Set([
   "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
   "groq/compound",
   "groq/compound-mini",
 ]);
 
-function resolveRequestedModel(model) {
-  const requested = typeof model === "string" ? model.trim() : "";
-  return ALLOWED_CHAT_MODELS.has(requested) ? requested : "";
-}
+// Résout l'identifiant envoyé par le client en plans d'appel concrets
+// { provider, apiModel }. Exporté pour les tests unitaires (aucun réseau requis).
+export function resolveModels(requestedModel = "") {
+  const requested = typeof requestedModel === "string" ? requestedModel.trim() : "";
 
-function resolveModels(requestedModel = "") {
-  const primary = resolveRequestedModel(requestedModel) || (process.env.GROQ_MODEL || "").trim() || DEFAULT_MODEL;
-  const raw = (process.env.GROQ_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).trim();
-  if (/^(none|off|0|false)$/i.test(raw)) return [primary];
-
-  const fallbacks = raw
-    .split(",")
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  return [...new Set([primary, ...fallbacks])];
-}
-
-let cachedClient = null;
-
-function getClient() {
-  if (!cachedClient) {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new ApiError(
-        "missing_key",
-        "La clé API Groq n'est pas configurée.",
-        "Ajoute GROQ_API_KEY dans les variables d'environnement du projet, puis redéploie.",
-        500
-      );
-    }
-    cachedClient = new OpenAI({
-      apiKey,
-      baseURL: "https://api.groq.com/openai/v1",
-      timeout: TOTAL_DEADLINE_MS,
-      maxRetries: 0, // on gère nous-mêmes les retries (backoff + bascule de modèle)
-    });
+  // Cas particulier : "Dolphin 24B" vit sur Hugging Face. Aucun secours
+  // Groq n'est appliqué derrière lui (fournisseur et clé différents).
+  if (requested === DOLPHIN_OPTION) {
+    return [{ provider: "hf", apiModel: DOLPHIN_API_MODEL }];
   }
-  return cachedClient;
+
+  // Groq : modèle demandé si valide, sinon GROQ_MODEL (env) sinon défaut,
+  // puis la liste des secours configurée.
+  const primary =
+    (GROQ_SELECTABLE.has(requested) ? requested : "") ||
+    (process.env.GROQ_MODEL || "").trim() ||
+    DEFAULT_MODEL;
+
+  const raw = (process.env.GROQ_FALLBACK_MODELS ?? DEFAULT_FALLBACK_MODELS).trim();
+  const fallbacks = /^(none|off|0|false)$/i.test(raw)
+    ? []
+    : raw
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean);
+
+  return [...new Set([primary, ...fallbacks])].map((apiModel) => ({ provider: "groq", apiModel }));
+}
+
+const clients = new Map();
+
+function getClient(provider) {
+  if (clients.has(provider)) return clients.get(provider);
+
+  const config = PROVIDERS[provider];
+  if (!config) {
+    throw new ApiError(
+      "server_error",
+      "Fournisseur de modèle inconnu.",
+      "Vérifie la configuration du serveur puis réessaie.",
+      500
+    );
+  }
+
+  const apiKey = process.env[config.apiKeyEnv];
+  if (!apiKey) {
+    throw new ApiError(
+      "missing_key",
+      `La clé ${config.apiKeyEnv} n'est pas configurée.`,
+      `Ajoute ${config.apiKeyEnv} dans les variables d'environnement du projet, puis redéploie.`,
+      500
+    );
+  }
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL: config.baseURL,
+    timeout: TOTAL_DEADLINE_MS,
+    maxRetries: 0, // on gère nous-mêmes les retries (backoff + bascule de modèle)
+  });
+  clients.set(provider, client);
+  return client;
 }
 
 class ApiError extends Error {
@@ -179,11 +224,12 @@ function mapError(error) {
   const message = String(error?.message || "");
   const retryAfterSeconds = getRetryAfterSeconds(error);
 
-  // Groq renvoie parfois 429 sans status explicite sur le SDK.
+  // Messages volontairement neutres : le frontend n'a pas à afficher quel
+  // fournisseur (Groq / Hugging Face) a servi la requête.
   if (status === 429 || code === "rate_limit_exceeded" || /rate[_ ]?limit/i.test(message)) {
     const apiError = new ApiError(
       "rate_limit",
-      "Limite atteinte : Groq reçoit trop de requêtes.",
+      "Limite atteinte : le service reçoit trop de requêtes.",
       "Patiente quelques secondes puis renvoie ton message.",
       429
     );
@@ -193,8 +239,8 @@ function mapError(error) {
   if (status === 401) {
     return new ApiError(
       "invalid_key",
-      "La clé API Groq est invalide ou non autorisée.",
-      "Vérifie GROQ_API_KEY dans les variables d'environnement et redéploie.",
+      "La clé API est invalide ou non autorisée.",
+      "Vérifie la clé API dans les variables d'environnement du projet et redéploie.",
       401
     );
   }
@@ -202,7 +248,7 @@ function mapError(error) {
     return new ApiError(
       "forbidden",
       "L'accès au modèle demandé est bloqué.",
-      "Vérifie que ce modèle est disponible sur ton compte Groq.",
+      "Vérifie que ce modèle est disponible sur le compte associé à ta clé.",
       403
     );
   }
@@ -210,7 +256,7 @@ function mapError(error) {
     return new ApiError(
       "model_unavailable",
       "Le modèle demandé n'est pas disponible.",
-      "Change GROQ_MODEL dans les variables d'environnement.",
+      "Sélectionne un autre modèle dans la liste.",
       404
     );
   }
@@ -225,7 +271,7 @@ function mapError(error) {
   if (status === 400) {
     return new ApiError(
       "bad_request",
-      "La requête envoyée à Groq a été refusée.",
+      "La requête envoyée au modèle a été refusée.",
       "Réessaie avec un message plus court ou reformulé.",
       400
     );
@@ -236,14 +282,14 @@ function mapError(error) {
   if (status >= 500) {
     return new ApiError(
       "upstream_error",
-      "Le service Groq est momentanément indisponible.",
+      "Le service du modèle est momentanément indisponible.",
       "Réessaie dans quelques secondes.",
       502
     );
   }
   return new ApiError(
     "server_error",
-    "Une erreur interne est survenue lors de l'appel à Groq.",
+    "Une erreur interne est survenue lors de l'appel au modèle.",
     "Vérifie les logs du serveur puis réessaie.",
     500
   );
@@ -262,11 +308,15 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
-async function createCompletion(client, messages, models) {
+async function createCompletion(messages, plans) {
   const deadline = Date.now() + TOTAL_DEADLINE_MS;
   let lastError = null;
 
-  for (const model of models) {
+  // Chaque "plan" est { provider, apiModel } : le bon client (et la bonne clé)
+  // sont résolus par fournisseur au moment de l'appel.
+  for (const plan of plans) {
+    const client = getClient(plan.provider);
+
     for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
       const remaining = deadline - Date.now();
       if (remaining < 3000) break;
@@ -274,7 +324,7 @@ async function createCompletion(client, messages, models) {
       try {
         const completion = await client.chat.completions.create(
           {
-            model,
+            model: plan.apiModel,
             messages,
             temperature: DEFAULT_TEMPERATURE,
             max_tokens: DEFAULT_MAX_TOKENS,
@@ -286,7 +336,7 @@ async function createCompletion(client, messages, models) {
         if (!reply) {
           lastError = new ApiError("empty_reply", "Minerva n'a rien renvoyé.", "Réessaie dans quelques secondes.", 502);
         } else {
-          return { reply, model, usage: completion?.usage || null };
+          return { reply, model: plan.apiModel, usage: completion?.usage || null };
         }
       } catch (error) {
         lastError = mapError(error);
@@ -301,7 +351,7 @@ async function createCompletion(client, messages, models) {
     }
   }
 
-  throw lastError || new ApiError("server_error", "Aucune réponse de Groq.", "Réessaie dans quelques secondes.", 502);
+  throw lastError || new ApiError("server_error", "Aucune réponse du modèle.", "Réessaie dans quelques secondes.", 502);
 }
 
 export default async function handler(req, res) {
@@ -336,7 +386,6 @@ export default async function handler(req, res) {
     }
 
     const history = sanitizeHistory(body?.messages, input);
-    const client = getClient();
 
     const system = [
       MINERVA_PROMPT.trim(),
@@ -354,7 +403,7 @@ export default async function handler(req, res) {
       { role: "user", content: input },
     ];
 
-    const { reply, model, usage } = await createCompletion(client, messages, resolveModels(body?.model));
+    const { reply, model, usage } = await createCompletion(messages, resolveModels(body?.model));
 
     sendJson(res, 200, { reply, model, usage });
   } catch (error) {
