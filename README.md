@@ -15,7 +15,7 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 - Message d'accueil contextuel basé sur l'heure locale du navigateur (plusieurs formulations par créneau).
 - Conversation **strictement chronologique** : le message le plus ancien en haut, la réponse la plus récente en bas.
 - Bulles alignées comme une messagerie classique : **Minerva à gauche** (avec avatar), **vous à droite**, même gabarit de bulle des deux côtés.
-- **Sélecteur de modèle IA simple dans la barre de saisie** (GPT-OSS 20B / 120B, Compound, Compound Mini, **Dolphin 24B**) : le client envoie seulement l'identifiant du modèle choisi ; le backend garde `openai/gpt-oss-20b` par défaut si aucun modèle valide n'est fourni. Aucun nom de fournisseur (Groq, Hugging Face…) n'apparaît dans l'interface.
+- **Sélecteur de modèle IA simple dans la barre de saisie** : le client envoie seulement l'identifiant du modèle choisi ; le backend garde `openai/gpt-oss-20b` par défaut si aucun modèle valide n'est fourni.
 - Réponses affichées en **texte brut, telles que renvoyées par l'API** (aucun reformatage côté client : le prompt système demande au modèle de structurer en texte simple — listes numérotées, lignes vides — sans Markdown).
 - Bouton **Copier** sur chaque message.
 - Barre de saisie auto-extensible, envoi avec **Entrée**, saut de ligne avec **Maj+Entrée**.
@@ -36,10 +36,10 @@ Le frontend est léger (HTML5 / CSS3 / JavaScript vanilla) et la clé API Groq e
 | Frontend      | HTML5 sémantique, CSS3 (Flexbox), JavaScript vanilla |
 | Icônes        | Font Awesome 6.5.2 (CDN) |
 | Backend       | Une seule fonction serverless `/api/chat.js` |
-| Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq **et** Hugging Face (routeur) |
-| Modèles       | Groq : `openai/gpt-oss-20b` par défaut (configurable via `GROQ_MODEL`), secours si 429/5xx. Hugging Face : « Dolphin 24B » (`dphn/Dolphin-Mistral-24B-Venice-Edition:featherless-ai`) sélectionnable dans la barre de saisie, servi uniquement avec `HF_TOKEN` |
+| Proxy IA      | SDK `openai` (`chat.completions.create`) pointé vers Groq |
+| Modèle        | `openai/gpt-oss-20b` par défaut (configurable via `GROQ_MODEL`) ; le sélecteur client peut seulement remplacer ce nom de modèle dans la requête, avec `openai/gpt-oss-120b` en secours si le modèle choisi/principal renvoie 429/5xx |
 | Hébergement   | Vercel (fonction serverless) et Render (service Node) |
-| Secrets       | `process.env.GROQ_API_KEY` et `process.env.HF_TOKEN`, jamais exposés au client |
+| Secrets       | `process.env.GROQ_API_KEY`, jamais exposé au client |
 
 > Le SDK OpenAI compatible Groq prend en charge `chat.completions.create`, qui est l'endpoint stable. `responses.create` existe aussi sur Groq, mais ce projet reste volontairement sur `chat.completions` pour une compatibilité maximale.
 
@@ -121,7 +121,7 @@ L'application est disponible sur **<http://localhost:3000>**.
 | `GROQ_TEMPERATURE`     | non         | `0.7`                                                 | Température de génération. |
 | `GROQ_MAX_TOKENS`      | non         | `4096`                                                | Nombre max de tokens de sortie. |
 | `GROQ_DEADLINE_MS`     | non         | `26000`                                               | Budget total d'une requête côté serveur (doit rester < `maxDuration`). |
-| `HF_TOKEN`             | non         | —                                                     | Clé API Hugging Face, utilisée **seulement** quand le modèle « Dolphin 24B » est sélectionné. |
+| `PORT`                 | non         | `3000`                                                | Port du serveur (utilisé par Render). |
 
 ---
 
@@ -133,7 +133,6 @@ L'application est disponible sur **<http://localhost:3000>**.
 4. Build command : laisser vide (ou `npm install`). **Output directory : `public`** (déjà configuré dans `vercel.json`, champ `outputDirectory`).
 5. Dans **Settings → Environment Variables**, ajoute :
    - `GROQ_API_KEY` = ta clé Groq
-   - `HF_TOKEN` = ta clé Hugging Face (nécessaire pour utiliser « Dolphin 24B »)
    - (optionnel) `GROQ_MODEL`, `GROQ_FALLBACK_MODELS`, `GROQ_TEMPERATURE`, `GROQ_MAX_TOKENS`
 6. Déploie. La route `/api/chat` est servie par `api/chat.js`.
 
