@@ -551,7 +551,7 @@ async function sendMessage(input) {
         if (!retriable) break;
 
         const waitMs = Math.min(Math.max(error.retryAfter * 1000, 1200 * attempt), 8000);
-        setTypingLabel(`Groq est saturé, nouvel essai dans ${Math.ceil(waitMs / 1000)} s`);
+        setTypingLabel(`Le service est saturé, nouvel essai dans ${Math.ceil(waitMs / 1000)} s`);
         await sleep(waitMs, controller.signal);
         setTypingLabel("Minerva réfléchit");
       }
@@ -580,7 +580,7 @@ async function sendMessage(input) {
       showToast("Impossible de joindre le serveur.", "Vérifie ta connexion puis réessaie.");
     } else if (error.status === 429) {
       showToast(
-        error.message || "Limite atteinte : Groq reçoit trop de requêtes.",
+        error.message || "Limite atteinte : le service reçoit trop de requêtes.",
         error.action || "Patiente quelques secondes, la réponse arrive automatiquement au prochain essai."
       );
     } else {
